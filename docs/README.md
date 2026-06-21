@@ -4,6 +4,7 @@ Start with **[00-GETTING-STARTED.md](00-GETTING-STARTED.md)**. For the big pictu
 
 ## 🌍 The environments (overview)
 - [ENVIRONMENTS.md](ENVIRONMENTS.md) — **the worlds library + the method**: City Sample base + PCG grammar generator + custom Blender facade kits → futuristic glass city, car showcase, Paris (Beaux-Arts), Art-Deco, sci-fi interior, real NYC. The "what can this make + how" overview.
+- [REALISM-GUIDE.md](REALISM-GUIDE.md) — **how to make ANY generated scene look real, not "bland 3D"** (style-agnostic: variety, PBR + normal maps, decals, ornament geometry, roofs, street life, the QA loop), illustrated with the Paris block.
 - [scifi-interior-plan.md](scifi-interior-plan.md) — free CC0 sci-fi interior kit + build plan.
 
 ## 🚀 Setup

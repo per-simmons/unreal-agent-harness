@@ -12,13 +12,16 @@ Three reusable building blocks, combined per environment:
 
 **Parallelize prep, serialize the editor:** asset prep (Blender kits, downloads, research) runs across many agents at once; the editor assembly is ONE environment at a time (single editor / one game thread — concurrent edits freeze it).
 
+**Making it look REAL (not bland CG):** the assembly above gets you the *shapes*; realism (variety + PBR/normal-mapped surfaces + decals + ornament + street life) is its own pass — see **[REALISM-GUIDE.md](REALISM-GUIDE.md)** (style-agnostic, worked through the Paris block).
+
 ## The worlds
 | World | Status | Level | How it's built |
 |---|---|---|---|
 | 🌆 **Futuristic glass city** | ✅ built + saved | `/Game/Map/Small_City_LVL` (glass district in the City Sample city) | City Sample base + 22 PCG glass towers (futuristic kit) + de-fog. [PCG-GUIDE](PCG-GUIDE.md) |
 | 🚗 **Car showcase** | 🚧 building | (separate level — `car-showcase` agent) | City Sample's ~13 drivable cars lined up; walk + C to drive |
-| 🏛️ **Beaux-Arts / Paris** | kit ✅, assembly queued | (separate level, TBD) | Paris facade kit → grammar generator → Haussmann city |
-| 🏙️ **Art-Deco city** | kit ✅, assembly queued | (separate level, TBD) | Art-Deco facade kit → grammar generator → 1920s skyscrapers |
+| 🏛️ **Beaux-Arts / Paris** | ✅ built + saved | `/Game/Map/Paris_LVL` | Paris facade kit → `PCG_Building_Paris` grammar → 49 uniform Haussmann mid-rise blocks on a wide-boulevard grid. [PCG-GUIDE](PCG-GUIDE.md) |
+| 🏛️ **Paris BLOCK (realism upgrade)** | ✅ built + saved | `/Game/Map/ParisBlock_LVL` | ONE tree-lined boulevard, 10 Haussmann buildings (2 rows of 5) — the realism template. Every building unique: per-building grammar graph rolls a different wall/window/corner from the **12 beaux_arts VARIANTS** + a different stone-tone MI (5 tones) + varied height (5-7 storeys) & width (per-actor X-scale). Mansard roofs via separate-actor row of `mod_mansard` (dark zinc) + roof-cap planes to hide hollow tops. Street life: road+sidewalks, 20 trees (City Sample maple kits), 5 parked cars, 12 lamps, 6 benches. Playable (PlayerStart on sidewalk). [PCG-GUIDE](PCG-GUIDE.md) |
+| 🏙️ **Art-Deco city** | ✅ built + saved | `/Game/Map/ArtDeco_LVL` | Art-Deco facade kit → `PCG_Building_ArtDeco` grammar → 49 towers, RADIAL downtown core (4 height tiers 40/80/120/160m, tallest center) + 9 ziggurat-crown actors on the core. [PCG-GUIDE](PCG-GUIDE.md) |
 | 🚀 **Sci-fi station interior** | plan ✅, assembly queued | (separate level, TBD) | download CC0 kit → assemble walkable interior |
 | 🗽 **Real NYC (Cesium)** | documented | (Cesium scene) | Google Photorealistic 3D Tiles. [NYC-CESIUM-WALKTHROUGH](NYC-CESIUM-WALKTHROUGH.md) |
 | ✈️ **Chase plane over a city** | documented | — | imported plane + chase cam. [plane-chase-pawn](plane-chase-pawn.md) |

@@ -1193,3 +1193,323 @@ touch the city's pristine global lighting).
     NOT a bug; pushing tints higher to "fix" it would look unnaturally emissive. Captures:
     `docs/glass2_aerial.png` (3/4), `docs/glass2_sunbehind.png` (the hard angle), `docs/glass2_street.png`
     (street canyon, clear sky). Level + MIs saved (`save_assets([])`).
+
+## 2026-06-21 — BEAUX-ARTS / HAUSSMANN PARIS in its OWN level (agent `paris-city`)
+**Result: 49 closed cream-limestone Haussmann buildings on a uniform mid-rise grid with wide boulevards,
+in a NEW level `/Game/Map/Paris_LVL` (NOT the glass-city Startup, NOT the protected Small_City/CarShowcase).
+The Beaux-Arts kit + the grammar generator FUSE cleanly — zero axis/scale breakage — proving again that the
+"width on +X, centered, base-pivoted, true-cm" kit spec is the whole game. All 49 closed (3 ISM each:
+corner+wall+window), zero empties, no freeze. Playable: PIE drops a walkable DefaultPawn on a boulevard,
+grounded. Keepers: `docs/paris_aerial.png` (3/4 — the cream-stone grid + boulevards), `docs/paris_street.png`
+(in-PIE street-canyon down a boulevard, the money shot), `docs/paris_facade.png` (close — arched French
+windows + iron Juliet-balcony bands + quoined corners), `docs/paris_overview.png` (high overview).**
+
+**NEW LEVEL the safe way (no "create empty level" MCP tool exists — only `load_level`/`duplicate`).**
+`AssetTools.duplicate('/Game/Map/Startup/Startup','/Game/Map/Paris_LVL')` → the dup is DIRTY immediately;
+`load_level` REFUSES to switch off a level with unsaved changes, so `save_assets(['/Game/Map/Paris_LVL'])`
+FIRST, then `load_level`. ⚠️ The current level when this agent started was the protected `CarShowcase_LVL`
+— it was NOT dirty (verified via `is_dirty` BEFORE doing anything), so switching away was safe and it was
+never saved. The "unsaved changes" block was the new Paris dup itself, not the protected level.
+- **The dup carried the WHOLE iter4-6 glass city** (49 `BP_BuildingSample_C_27..75` + the `CityGround`
+  plaza/road planes + 2 StartMapTextRender). Cleared it for a clean Paris slate: the CityGround/text removed
+  fine via `find_actors`+`remove_from_scene`, but the **49 glass BP buildings did NOT delete by a
+  name-filtered find** (the label query missed; they're WP/external-ish actors) — had to `remove_from_scene`
+  each by EXACT refPath (`...PersistentLevel.BP_BuildingSample_C_<27..75>`) in a loop → all 49 gone. Kept the
+  inherited Sun/SkyAtmosphere/SkyLight/2 PPVs/the ±250m `Ground` plane and re-tuned them for daylight.
+
+**KIT IMPORT — true cm, no 100× bug (the kit's unit fix held).** `StaticMeshTools.import_file` the 5 FBXs
+from `assets/beaux_arts_kit/` → `/Game/PCG/BeauxArtsKit/{mod_corner,mod_wall,mod_window,mod_ground,mod_mansard}`.
+`get_bounds` confirmed X −200..+200 (400 wide, centered), base-pivot Z 0..400 (ground 0..600, mansard 0..350)
+— exactly `_stats.json`, NO blow-up. **As NOTES warned, the FBX collapsed the 2 Blender slots (Stone+Iron)
+to ONE slot `M_Stone` on import** (verified `get_material_slots` → `["M_Stone"]`). The relief still reads
+because it's GEOMETRIC (proud cornices/quoins/balconies self-shadow). Authored a cream-limestone Material
+`/Game/PCG/BeauxArtsKit/M_ParisLimestone` (BaseColor ~0.62,0.57,0.47 warm cream / Roughness 0.78 / Metallic 0)
+and `set_material('M_Stone', M_ParisLimestone)` on all 5 modules.
+
+**GRAMMAR GRAPH — `PCG_Building_CitySample` → `PCG_Building_Paris`, meshInfo swap = the whole job.** The base
+graph's `userParameters.meshInfo` is positional `[0]C/Column [1]W/Wall [2]W1/Window [3]W2/HoleWindow`; set it
+to `[mod_corner, mod_wall, mod_window, mod_window]` (W1=W2 reuse the window bay) + `moduleInfo[].size=400`
+(inert — Size is recomputed from Extents.X=200 — but keeps the editor readable) + debugFloors/debugModules
+false + debugColor white (no vertex tint). Pass the FULL `userParameters` bag as the `values` JSON STRING
+(set_properties only overrides keys you pass). A ONE-building test (spawn BP scale 13 → set graph → wait ~8s
+→ `get_actor_bounds`+`get_components`) returned **3 ISM (corner/wall/window), zmax≈buildingHeight, base at
+Z=0** and a capture showing real arched French windows + iron balconies + quoined corners. The kit assembles
+PERFECTLY (vs the CH-kit failure in iter2) — X-centered/base-pivot is confirmed the requirement.
+
+**HAUSSMANN LAYOUT = UNIFORM MID-RISE, not a downtown core (the key difference from every prior glass iter).**
+Made 4 per-height tier graphs `/Game/PCG/CityTiers/PCG_Paris_{H22,H26,H30,Landmark}` (buildingHeight
+2200/2600/3000/4200 cm = ~6/7/8/11 floors) — all the SAME Paris meshInfo, only height differs. Spawned a
+**7×7=49 grid**, SPACING **6000cm** (wide Paris boulevards — vs the dense glass city's 4000), scale 13
+(~34×29m footprint → ~26m boulevards), per-actor centering offset `(-940,-87)*13/8`. Height assignment is a
+flat scatter `HTS[(i*2+j*3)%3]` (NOT ring-based — no tall center) so the mass is uniformly mid-rise, plus
+**3 Landmark cells** ((3,3),(1,5),(5,2)) at 4200cm for the "1-2 taller accents." Verified all 49: 3 ISM each,
+0 empty; zmax histogram 2050×20 / 2550×13 / 2800×13 / 4050×3 = the Haussmann silhouette (uniform cornice line
++ a few taller landmarks). Spawn recipe identical to iter3/5 (spawn BP → set `PCG.PCGGraphInstance.graph` to a
+tier graph → auto-regens to that height; serial-in-script, batched 28+21, no freeze). Foldered under
+outliner `ParisCity`. ISM names are `ISM_mod_corner_0 / ISM_mod_wall_0 / ISM_mod_window_0`.
+
+**LIGHTING — bright clear DAYLIGHT (its own world, so I DO tune it, unlike the in-City-Sample iter8).**
+DirectionalLight pitch -48 / yaw 35 / intensity 12 / Temperature 5800; SkyLight `bRealTimeCapture=true`
+intensity 0.7 `bLowerHemisphereIsBlack=false`; both unbound PPVs AEM_Manual, MotionBlur 0, DOF neutralized
+(fstop 32 / focal 1e6). **EXPOSURE CALIBRATION for CREAM STONE (different from brick/glass!):** cream
+limestone is far more reflective than brick — at EV +0.5 it was dim-grey, at EV +1.3 it BLEW pure white, even
+EV +0.1 stayed washed. **Keeper = AEM_Manual `AutoExposureBias = -1.0` on BOTH PPVs + base color darkened to
+~0.62,0.57,0.47.** Sign rule from prior iters holds (lower-magnitude = brighter) but reflective light stone
+wants a darker key than diffuse brick (brick keeper was +0.5). Also gave the ±250m `Ground` plane a light
+warm-grey pavement material `/Game/PCG/BeauxArtsKit/M_ParisGround` (0.34,0.33,0.30 / rough 0.9) via the
+StaticMeshComponent `OverrideMaterials` so the city sits on a plaza, not dark asphalt.
+
+**PLAYABLE.** Level had NO PlayerStart and DefaultGameMode = base `GameModeBase` (spawns/possesses a
+DefaultPawn — walkable WASD). `trace_world` straight down at boulevard points returned distance=5000 from
+z=5000 (= ground at z=0, no building) confirming the gaps are clear. Added a `PlayerStart` at (-22000,1500,200)
+on the southern boulevard facing +X. `StartPIE` (warmup 4s) → `DefaultPawn_0` spawned in `UEDPIE_0_Paris_LVL`
+at exactly the PlayerStart, grounded; in-PIE capture = a walkable boulevard receding between two rows of
+Haussmann facades. StopPIE clean. (No PostProcessVolume MotionBlur issue — set to 0 on both PPVs.)
+
+**HONEST VISION READ vs real Haussmann Paris:**
+  - ✅ Reads unmistakably as Haussmann Paris: uniform cream-limestone mid-rise blocks, regular cornice line,
+    a clean grid with WIDE boulevards, arched French windows + continuous wrought-iron Juliet-balcony bands +
+    rusticated quoined corners on every facade (clear in `paris_facade.png` and the in-PIE street shot). The
+    boulevard-perspective street shot is the strongest "this is Paris" frame.
+  - ✅ Correct silhouette: uniform mid-rise (NOT skyscrapers, NOT a downtown core) with 3 subtle taller
+    landmarks — exactly the brief. Kit+grammar fuse robust (49/49 closed, no freeze).
+  - ⚠️ **FLAT TOPS — no mansard roofs (the one real gap).** `mod_mansard` was imported + limestoned but NOT
+    placed: the grammar's vertical grammar is `[MainFloor][Intermediate]*` (in node `AddAttribute_3` →
+    `@Data.Grammar`, modulesInfo MainFloor 300/Intermediate 250 in `VolumeSlicer_5`; horizontal grammar per
+    floor in `SelectGrammar_26`). Adding a `[Roof]` symbol mapped to the mansard needs a 5th positional
+    meshInfo/moduleInfo entry + a new SelectGrammar criterion + the ByAttribute spawner to handle the new
+    symbol — exactly the fragile mid-graph grammar surgery the guide warns silently zeroes spawning, for a
+    crown that's a nice-to-have over an already-strong facade. Left flat-topped + documented rather than risk
+    breaking all 49. **To add later:** set `AddAttribute_3` grammar to `[MainFloor][Intermediate]*[Roof]`, add
+    `{symbol:Roof,size:350...}` to `VolumeSlicer_5.modulesInfo`, add a `SelectGrammar` criterion
+    `key=Roof → [C][W,W1]*[C]`, extend moduleInfo+meshInfo with a 5th `M`(mansard) symbol used by that
+    grammar — TEST on ONE building and confirm ISM>0 before applying to the grid (revert if it zeroes).
+    Safer alt: a separate mansard top-course pass placing `mod_mansard` instances per building top edge.
+  - ⚠️ Single material slot (Stone only; the Iron slot collapsed on import) so railings/zinc aren't a distinct
+    dark metal — the relief still reads geometrically. For true stone-vs-iron contrast, re-author the kit as
+    separate Stone+Iron meshes (or bake the slot split to vertex color).
+  - ⚠️ All buildings share ONE limestone tone — a real Paris street has subtle per-building stone variation
+    + soot grime gradients. A few tint MIs (like the glass-city per-tint sets) or a WorldZ grime gradient in
+    M_ParisLimestone is the next realism lever.
+  - ⚠️ The grammar footprint is the BP's default L/corner spline (open courtyard side), uniform orientation —
+    Parisian-ish (interior courtyards) but the open sides face the same way; varying footprint rotation per
+    block would help.
+
+  **Assets (all saved):** level `/Game/Map/Paris_LVL`; kit `/Game/PCG/BeauxArtsKit/{mod_*, M_ParisLimestone,
+  M_ParisGround}`; grammar `/Game/PCG/PCG_Building_Paris` + tiers `/Game/PCG/CityTiers/PCG_Paris_{H22,H26,H30,
+  Landmark}`. **Actors:** 49 `BP_BuildingSample_C_*` in outliner folder `ParisCity` (scale 13, 6000 spacing) +
+  `PlayerStart_0` + re-lit Sun/SkyLight/2 PPVs + the limestone-pavement `Ground`. Captures `docs/paris_*.png`.
+  Protected levels untouched (CarShowcase/Small_City never loaded-into or saved this session).
+
+## 2026-06-21 — ART-DECO 1920s SKYSCRAPER CITY in its OWN level (agent `artdeco-city`)
+**Result: 49 closed warm-limestone Art-Deco towers in a NEW level `/Game/Map/ArtDeco_LVL`, with a RADIAL
+DOWNTOWN CORE (4 height tiers, tallest at center) + 9 stepped-ziggurat CROWNS on the core cluster. This is
+the first build with a real spatial downtown core — and the CROWN WORKED, via the separate-actor approach
+(NOT the fragile grammar surgery). All 49 closed (3 ISM each: corner/wall/window), zero empties, no freeze.
+Playable: PIE drops a walkable DefaultPawn on the southern boulevard facing the crowned core, grounded.
+Mirrors the Paris pipeline exactly; the Art-Deco kit + grammar FUSE cleanly (X-centered/base-pivot/true-cm
+spec holds again). Keepers: `docs/artdeco_aerial.png` (3/4 hero — crowned setback skyline), `docs/artdeco_street.png`
+(in-PIE boulevard canyon — chevron spandrel detail, money shot), `docs/artdeco_facade.png` (close — floor-by-floor
+window bays + bronze grille banding + crowned core behind), `docs/artdeco_aerial_crowns.png` (high overview).**
+
+**NEW LEVEL — same safe sequence as Paris.** Current level at start was `Paris_LVL`, `is_dirty=false` → safe to
+switch away without saving. `AssetTools.duplicate('/Game/Map/Startup/Startup','/Game/Map/ArtDeco_LVL')` → the dup is
+DIRTY → `save_assets(['/Game/Map/ArtDeco_LVL'])` FIRST, then `load_level`. The Startup dup carried the glass city
+(49 `BP_BuildingSample_C_27..75` + `StaticMeshActor_51..67` glass towers + 2 StartMapTextRender = 68 actors). Removed
+all 68 by EXACT refPath in one ProgrammaticToolset loop (name-filtered finds miss these WP actors — use refPaths) →
+clean slate kept: WorldSettings, Brush_0, PCGWorldActor_0, DirectionalLight/SkyAtmosphere/SkyLight, 2 PPVs, the
+±250m ground `StaticMeshActor_1`, engine subsystems. Protected levels (Small_City/CarShowcase/Paris) never loaded-into.
+
+**KIT IMPORT — true cm, no 100× bug.** `import_file` the 5 FBXs from `assets/art_deco_kit/` → `/Game/PCG/ArtDecoKit/
+{mod_corner,mod_wall,mod_window,mod_ground,mod_crown}`. `get_bounds` confirmed exactly `_stats.json`: X −200..+200
+(400 wide, centered), base-pivot Z 0..400 (ground 0..600, crown 0..800, Y ±55). As NOTES warned the FBX collapsed
+the 2 Blender slots (Stone+Bronze) to ONE slot `M_Stone`; the geometric flutes/chevrons/grilles still read (they're
+GEOMETRY). Authored warm-limestone `/Game/PCG/ArtDecoKit/M_ArtDecoStone` (BaseColor 0.60,0.50,0.37 / Rough 0.72 /
+Metallic 0) + `set_material('M_Stone', M_ArtDecoStone)` on all 5 modules. Ground plane got `M_ArtDecoGround`
+(0.20,0.185,0.165 / rough 0.88) via the StaticMeshComponent `OverrideMaterials`.
+
+**GRAMMAR GRAPH — `PCG_Building_CitySample` → `PCG_Building_ArtDeco`, meshInfo swap = the whole job.** Duplicated the
+base CitySample graph (clean provenance), set the FULL `userParameters` bag (set_properties only overrides keys you
+pass): `meshInfo=[mod_corner, mod_wall, mod_window, mod_window]` (W1=W2 reuse), `moduleInfo[].size=400`, debugFloors/
+debugModules false, debugColor white. ONE-building test (spawn BP scale 13 → set `PCG.PCGGraphInstance.Graph` to the
+dup → ~9s regen → get_components+bounds) returned **3 ISM (corner/window/wall), zmax 7800≈buildingHeight 8000** and a
+capture showing a genuinely closed multi-floor Deco tower (vertical piers, window grid all faces). Kit assembles
+PERFECTLY — confirms the X-centered/base-pivot spec is the requirement.
+
+**RADIAL DOWNTOWN CORE = the new thing (Art-Deco ≠ uniform Paris).** Made 4 per-height tier graphs
+`/Game/PCG/CityTiers/PCG_ArtDeco_{H40,H80,H120,H160}` (buildingHeight 4000/8000/12000/16000 cm = ~9/19/28/37 floors)
+— all the SAME Art-Deco meshInfo, only height differs (set on each GRAPH asset's `userParameters.buildingHeight`,
+confirmed via read-back). Spawned a **7×7=49 grid**, SPACING **6500cm**, scale 13 (~34×29m footprint → ~31m streets),
+per-actor centering offset `(-1568,-141)` (measured from the test building's footprint-vs-pivot offset at scale 13).
+**Height = chebyshev RING distance from center (3,3):** ring0→H160, ring1→H120, ring2→H80, ring3→H40. This places the
+tallest tower dead center stepping DOWN to mid-rise at the edges = the Manhattan-1929 setback silhouette. Verified the
+spine: (3,3) zmax 15800 / (2,3) 11800 / (1,3) 7800 / (0,3) 3800 — exactly the 4 tiers. **All 49: 3 ISM each, 0 empty,
+ISM histogram {3:49}.** Spawn recipe identical to Paris (spawn BP → set `PCG.PCGGraphInstance.Graph` to a tier graph →
+auto-regen to that height; serial-in-script, all 49 in one loop, no freeze). Foldered under outliner `ArtDecoCity`.
+
+**THE ZIGGURAT CROWN WORKED — via separate capping ACTORS, NOT grammar surgery (the safe path the brief/NOTES called).**
+The stock vertical grammar `[MainFloor][Intermediate]*` has no crown symbol; adding a `[Roof]` symbol is the documented
+fragile mid-graph surgery that silently zeroed Paris's mansard — so I did NOT touch the grammar. Instead spawned
+`mod_crown` as 9 separate StaticMesh actors on top of the tall core cluster (center H160 + the 8 ring-1 H120 towers):
+each at the tower's footprint center `(cellX+1568, cellY+141)`, Z = the building's `get_actor_bounds().max.z − 50`,
+**crown scale 6.0** (native 4m base → 24m wide, sits inset on the ~34m roof like a real setback; 800cm native ×6 = 48m
+crown). Foldered `ArtDecoCity/Crowns`. Result = the central tower carries a tall spired ziggurat, 8 crowned towers
+around it → the iconic crowned-downtown silhouette (see `artdeco_aerial.png`). **Recipe for crowns on any grammar city:**
+get each target building's `get_actor_bounds().max.z`, spawn the crown mesh at the footprint center at that Z, scale so
+the crown base ≈ 0.6–0.7× the roof width. Zero risk to the spawned grammar buildings. (A grammar `[Roof]` symbol remains
+the "purist" alt but is the fragile path — not worth it when separate actors read identically.)
+
+**LIGHTING — warm clear DAYLIGHT.** DirectionalLight pitch −45 / yaw 40 / Temperature 5600 / intensity 11; kept the
+inherited SkyAtmosphere/SkyLight. Both unbound PPVs: AEM_Manual, **AutoExposureBias −0.5** (warm limestone at base 0.60
+is darker than Paris's cream 0.62 so it wants a brighter key than Paris's −1.0; −0.5 reads crisp, not blown),
+ApplyPhysicalCameraExposure false, **MotionBlurAmount 0** (override). At −0.5 the stone reads warm-tan in sun with clean
+shadows and a blue sky.
+
+**PLAYABLE.** DefaultGameMode = base `GameModeBase` (spawns/possesses a walkable DefaultPawn, WASD). `trace_world` down
+at the south boulevard point returned ground at z=0 (clear, no building). Added `PlayerStart` at (1568,−22000,150) yaw 90
+facing +Y straight up the central avenue toward the crowned core. `StartPIE` (warmup 5s) → `DefaultPawn_0` spawned in
+`UEDPIE_0_ArtDeco_LVL` at exactly the PlayerStart, grounded (bounds z 115..185). In-PIE capture = a walkable Deco street
+canyon. StopPIE clean.
+
+**HONEST VISION READ vs real 1920s Art-Deco:**
+  - ✅ Reads unmistakably as a 1920s Art-Deco downtown: warm-limestone towers, vertical-pier window rhythm, geometric
+    chevron/zigzag bronze spandrel banding floor-to-floor (clear in `artdeco_facade.png` and the street shot), and the
+    RADIAL setback massing (tall crowned core stepping down to mid-rise) = the Chrysler/Empire-State-era Manhattan
+    silhouette. The boulevard street canyon is the strongest frame.
+  - ✅ The crown is the win the brief asked for — 9 stepped-ziggurat tops with central finials cap the core cluster;
+    it WORKED without the grammar surgery that zeroed Paris's mansard.
+  - ✅ Height variation + downtown core (the key Art-Deco vs uniform-Paris difference) is real and spatial (4 tiers,
+    37→9 floors center-to-edge), not a flat scatter.
+  - ⚠️ Single material slot (Stone only; the Bronze slot collapsed on import like Paris's Iron) so the bronze grilles/
+    chevrons/crown banding aren't a distinct metal — the relief still reads geometrically. For true stone-vs-bronze
+    contrast, re-author the kit as separate Stone+Bronze meshes (or bake the slot split to vertex color).
+  - ⚠️ All towers share ONE limestone tone; per-building stone/soot variation (a few tint MIs or a WorldZ grime
+    gradient in M_ArtDecoStone) would add realism — same lever noted for Paris.
+  - ⚠️ Crowns are placed at one global scale (6.0) sized to the core towers; they slightly overhang the narrower towers.
+    Per-building crown scale (= roof width / crown base) would seat them perfectly. Cosmetic; reads fine at skyline scale.
+  - ⚠️ Grammar footprint is the BP's default L/corner spline (open courtyard side), uniform orientation — same as Paris.
+
+  **Assets (all saved):** level `/Game/Map/ArtDeco_LVL`; kit `/Game/PCG/ArtDecoKit/{mod_*, M_ArtDecoStone, M_ArtDecoGround}`;
+  grammar `/Game/PCG/PCG_Building_ArtDeco` + tiers `/Game/PCG/CityTiers/PCG_ArtDeco_{H40,H80,H120,H160}`. **Actors:** 49
+  `BP_BuildingSample_C_*` in outliner folder `ArtDecoCity` (scale 13, 6500 spacing, radial height tiers) + 9 `Crown_*`
+  in `ArtDecoCity/Crowns` (mod_crown scale 6) + `PlayerStart_0` + re-lit Sun/SkyLight/2 PPVs + limestone-pavement ground.
+  Captures `docs/artdeco_*.png`. Protected levels untouched (Small_City/CarShowcase/Paris never loaded-into or saved).
+
+## 2026-06-21 — PARIS BLOCK: the REALISM template (agent `paris-block`)
+**The point of this pass: the prior `Paris_LVL` looked FAKE because every building was identical, one flat tone,
+flat-topped, no street. This builds ONE genuinely realistic tree-lined Parisian BLOCK that fixes all four levers,
+in a NEW level `/Game/Map/ParisBlock_LVL` (Startup-dup, protected levels untouched). 10 Haussmann buildings in 2
+rows of 5 facing a boulevard; every building unique; mansard roofs; full street life; playable. All 10 closed
+(4 ISM each: corner/wall/window×2), 0 empties, no freeze. Keepers: `docs/parisblock_street.png` (boulevard canyon
+— the money shot), `docs/parisblock_facade.png` (close — adjacent buildings clearly differ in window/wall/tone),
+`docs/parisblock_aerial.png` (3/4), `docs/parisblock_pie_street.png` (in-PIE eye level).**
+
+**THE FOUR REALISM LEVERS — exactly how each was solved:**
+
+**1) FACADE VARIETY (no two buildings alike).** The grammar's `meshInfo` is POSITIONAL `[C,W,W1,W2]` — ONE mesh per
+symbol per graph, so a single graph = uniform facade and there is NO per-bay random-palette hook in the stock
+grammar. **The realism mechanism = ONE grammar graph PER BUILDING, each with a different (corner,wall,window1,window2)
+pick from the 12 `beaux_arts_kit/variants` modules.** Imported all 12 variants → `/Game/PCG/ParisVariants/mod_*`
+(true cm, X-centered ±200, base-pivot Z 0..400; ground 0..600, mansard 0..350 — the unit fix held, NO 100× bug).
+Within one building W1 and W2 are separate symbols so the grammar already mixes wall + 2 window types per facade;
+across buildings the corner/wall/window picks differ → genuinely distinct facades. Verified the variant kit
+ASSEMBLES CLEAN (4 distinct `ISM_mod_*` per building, zmax≈buildingHeight, base≈0) — same X-centered/base-pivot
+rule that makes the base kit work. Also varied HEIGHT per building (buildingHeight 2200-2900 = 5-7 storeys) and
+WIDTH per building (per-actor X-SCALE 12-15 → the grammar adds more BAYS, it does NOT stretch the 400cm module).
+
+**2) PER-BUILDING TONE (color variation).** `meshInfo` is a bare StaticMesh-ref array with NO overrideMaterials hook,
+and the tone lives on the SHARED mesh's material slot — so per-building tone = per-building MESH COPIES with the tone
+baked on. Authored base material `/Game/PCG/ParisVariants/M_ParisStone` (params: `StoneColor` vector, `GrimeColor`
+vector, `Rough` scalar; BaseColor = Lerp(GrimeColor, StoneColor, saturate(worldZ × 0.00045)) → a soot/grime gradient
+darker toward the street base = lived-in). 5 tone MIs in `…/ParisVariants/Tones/MI_Stone_{Cream,WarmGrey,Beige,Soot,
+PaleGold}`. **Per building: duplicate its 4 chosen variant meshes into `/Game/PCG/ParisBlock/<Bid>/` and
+`set_material('M_Stone', MI_<tone>)` on each, then point that building's graph meshInfo at its own copies.** 10
+buildings × 4 = 40 mesh copies; cycle the 5 tones across the row. **TONE-CONTRAST LESSON:** first pass the tones read
+near-identical — needed (a) BIGGER value+hue separation (soot ~0.42 vs cream ~0.80, push hue not just brightness) AND
+(b) raise `GrimeColor` close to `StoneColor` so the grime gradient doesn't muddy every building toward the same dark
+base. After that the row reads as distinct buildings from street level and aerial.
+
+**3) MANSARD ROOFS — separate-actor recipe (NOT grammar surgery; same safe path as the Art-Deco crowns).** The stock
+vertical grammar `[MainFloor][Intermediate]*` has no roof symbol and adding `[Roof]` is the documented fragile surgery
+that silently zeroed Paris's mansard. Instead place `mod_mansard` (dark-zinc `M_ParisZinc`: BaseColor 0.09/0.10/0.115,
+metallic 0.55, rough 0.38) as a **continuous ROW of separate actors along the FRONT and BACK roof edges only** (NOT the
+short side edges — wrapping all 4 made a "castle merlon / tooth-ring" that looked wrong; front+back only reads as a
+mansard line). Per building: get `get_actor_bounds`, tile N = round(width/400) modules along each long edge at
+`z = bounds.max.z - 25`, X-scale = segment/400 so they're gap-free, dormer face pointing OUTWARD (`mod_mansard`'s dormer
+side is local −Y → yaw 0 toward −Y street, 180 toward +Y). **GOTCHA: the mod_mansard mesh's 3 dormers are deep boxes —
+at a 34m roof they tile into a slightly chunky dark band, acceptable but not elegant; reads fine at street scale.**
+**Plus ROOF-CAP planes:** the grammar boxes are HOLLOW open-top — invisible from the street but the open interiors show
+from any aerial. Fix = one `/Engine/BasicShapes/Plane` per building inset ~150cm inside the footprint at
+`z = max.z - 120`, M_ParisZinc material via the StaticMeshComponent `OverrideMaterials` → solid dark roof, hollow gone.
+
+**4) STREET LIFE (lived-in, not bare).** Re-materialed the inherited ±250m ground plane with warm pavement
+`M_ParisGround`; added a dark `M_Road` plane along the street centerline (Y=0) + two light `M_Sidewalk` strips
+(Y=±1300) between road and buildings. Then City Sample props (all under `/Game/Prop/...`): **trees** = a row of
+`Kit_Tree_Maple_Sugar/Tree_Maple_{A,B}` + `Kit_Tree_Maple_Red/Tree_Maple_Red_A` (scale ~1.9×2.1, ~10 per sidewalk)
+on `Kit_TreeBase_A/SM_TreeBase_Circle_A` bases; **5 parked cars** = `Vehicle/vehCar_vehicle{02,05,06,13}/Mesh/
+SM_vehCar_vehicle*` (body mesh only — wheels are separate; lift z≈38 so it reads, fine at distance) along the road
+edge (Y≈±720, long axis = X = yaw 0); **12 lamp posts** `Kit_StreetLamp_B/SM_StreetLamp_B`; **6 benches**
+`Kit_bench_RR/mesh/SM_street_bench`. (Vehicle/tree assets present in the City Sample project; `find_assets` them.)
+
+**LAYOUT (street along X).** Block X[−9400..9400], boulevard centerline Y=0. North row (Y center +3000, footprint
+inner face ≈ Y 1300) and South row (Y center −3000) of 5 buildings each at X = −7400,−3700,0,3700,7400, spaced ~3700
+(34m building + small gap = a continuous Haussmann street wall), ~26-33m boulevard between inner faces.
+**Per-actor footprint centering offset = `(-940*S/8, -87*S/8)`** for actor scale S (the grammar footprint extends +X/+Y
+from the actor origin, not symmetric — same offset rule as iter3/Paris). Both rows yaw 0 (the grammar box is closed on
+all sides, so orientation only affects the open-courtyard footprint side — uniform orientation reads fine, the
+documented Paris behavior).
+
+**LIGHTING — bright clear Paris daylight (own level, so tuned).** DirectionalLight pitch −48 / yaw 35 / intensity 11 /
+Temperature 5800; SkyLight `bRealTimeCapture=true` intensity 0.8; both unbound PPVs AEM_Manual, MotionBlurAmount 0, DOF
+neutralized (fstop 32 / focal 1e6). **EXPOSURE: cream/light stone wants a slightly brighter key than the prior Paris
+−1.0 — `AutoExposureBias = -0.4` on BOTH PPVs** read crisp+warm (−1.0 was dim/flat-grey and flattened the tone
+variety; do NOT go positive or the light stone blows white). Sign rule holds (lower-magnitude = brighter).
+
+**PLAYABLE.** `PlayerStart` at (−9000,−1250,150) on the south sidewalk facing down the boulevard. `StartPIE`
+(warmup 5s) → `DefaultPawn_0` spawned at exactly the PlayerStart, grounded (z 115-185 = standing on the sidewalk),
+walkable WASD. MotionBlur 0 on both PPVs.
+
+**HONEST VISION READ (QA loop: captured + LOOKED, iterated the weakest lever each pass):**
+  - ✅ The **street-level boulevard canyon is genuinely convincing** — two rows of varied Haussmann facades receding
+    in perspective, tree-lined sidewalks, parked car, lit lamps, real road. Reads as a real Paris street, not a
+    repeated block. The facade close-up shows ADJACENT buildings with clearly different window heads (arched /
+    pedimented / balconied), wall treatments (ashlar / rusticated / pilastered), quoined corners, and different stone
+    tones. This is the categorical fix over `Paris_LVL`'s clone-row.
+  - ✅ Mansard roofs (dark zinc) on every building → no more flat tops. Roof caps hide the hollow interiors from above.
+  - ✅ Per-building height (5-7 storeys) + width variety reads in the rooflines.
+  - ⚠️ **Tone variety reads clearly at street level but is SUBTLE from the high aerial** (exposure flattens it) — the
+    biggest remaining realism gap. Pushing the MI separation further (or a per-building WorldZ grime variance) would
+    help the bird's-eye read; at eye level it's already good.
+  - ⚠️ The mod_mansard dormers tile a touch CHUNKY at 34m width (deep dormer boxes) — reads as a dark roofline but not
+    a delicate mansard slope. A shallower-dormer mansard variant, or scaling one continuous mansard per edge, would
+    refine it. Minor at street scale.
+  - ⚠️ Parked cars are body-mesh-only (City Sample wheels are separate meshes) — reads fine at distance, slightly
+    low/wheel-less up close. Assemble body+4 wheels (or use a City Sample vehicle BP) for a hero close-up.
+  - ⚠️ Trees are the bare-branch maple LODs (wintry Paris) — atmospheric but could swap to a leafed variant for summer.
+
+**Assets (all saved):** level `/Game/Map/ParisBlock_LVL`; 12 variant meshes `/Game/PCG/ParisVariants/mod_*`; base
+material `…/ParisVariants/M_ParisStone` (StoneColor/GrimeColor/Rough params + WorldZ grime lerp) + zinc
+`…/ParisVariants/M_ParisZinc`; 5 tone MIs `…/ParisVariants/Tones/MI_Stone_*`; 10 per-building graphs
+`/Game/PCG/ParisBlock/PCG_B0..B9` + 40 per-building tinted mesh copies `/Game/PCG/ParisBlock/B*/`. **Actors:** 10
+`BP_BuildingSample_C_1..10` (folders `ParisBlock/NorthRow` + `/SouthRow`, scale 12-15), 182 `Mansard_*`
+(`ParisBlock/Mansards`), 10 `RoofCap_*` (`ParisBlock/Roofs`), road+2 sidewalks (`ParisBlock/Street`), 20 trees+bases
+(`ParisBlock/Trees`), 12 lamps + 6 benches (`ParisBlock/StreetProps`), 5 cars (`ParisBlock/Cars`), `PlayerStart_0`,
+re-lit Sun/SkyLight/SkyAtmosphere/2 PPVs + pavement Ground. Captures `docs/parisblock_*.png`. Protected levels
+(Small_City/CarShowcase/Paris/ArtDeco) never loaded-into or saved (ArtDeco was the start level, verified `is_dirty`
+false before switching).
+
+**REUSABLE RECIPE (this is the template for the Art-Deco block + any "realistic block"):**
+  1. NEW level = dup Startup → save → load; clear inherited city actors by EXACT refPath (name-filtered finds miss
+     some). Verify the start level `is_dirty=false` before switching so you never save a protected level.
+  2. Import the kit's VARIANT modules (X-centered/base-pivot/true-cm — `get_bounds` to confirm).
+  3. Base stone material with `StoneColor`+`GrimeColor` vector params + a WorldZ grime lerp; N tone MIs (push value AND
+     hue apart, keep grime near stone).
+  4. ONE grammar graph PER building (dup `PCG_Building_CitySample`, set FULL `userParameters` bag with a distinct
+     `meshInfo`=[corner,wall,window,window] pick + `buildingHeight`); per-building tinted MESH COPIES for tone.
+  5. Spawn `BP_BuildingSample` per building (scale 12-15 for width variety), set `PCG.PCGGraphInstance.graph` to its
+     graph (auto-regens), centering offset `(-940*S/8,-87*S/8)`. Wait for async regen, verify ISM>0 in a SEPARATE call.
+  6. Mansards = separate-actor row of the mansard module along front+back roof edges (dormer face out, gap-free X-scale,
+     z=bounds.max.z−25), dark-zinc material. Roof-cap plane per building to hide hollow tops.
+  7. Street: pavement ground + road + sidewalk planes (materials via StaticMeshComponent `OverrideMaterials`), then
+     City Sample trees/cars/lamps/benches rows. Bright daylight (sun warm ~intensity 11, EV ≈ −0.4 for light stone,
+     MotionBlur 0). PlayerStart on the sidewalk.
