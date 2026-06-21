@@ -23,24 +23,15 @@ xcodebuild -downloadComponent MetalToolchain
 Either your own blank project, or a sample (e.g. Fab → "Create project" → City Sample — note it's ~90 GB and a *Complete Project*, not a level you add). The agent drives whatever project is **currently open**.
 
 ## 3. Enable the Unreal MCP (so Claude can connect)
-The MCP plugin is **engine-level** in 5.8 (`…/UE_5.8/Engine/Plugins/Experimental/ModelContextProtocol`), but **every project must turn it on + start the server.** A fresh project does NOT have it on. Full, copy-pasteable recipe: [`UNREAL-MCP-ENABLE.md`](UNREAL-MCP-ENABLE.md). In short:
+The MCP server is **per-project** — every project must enable the plugin once and start its own server. A fresh project does NOT have it on. Full recipe (Epic's official method): [`UNREAL-MCP-ENABLE.md`](UNREAL-MCP-ENABLE.md). In short:
 
-1. In the project's **`.uproject`**, enable plugins: `ModelContextProtocol`, `AllToolsets`, `PythonScriptPlugin`.
-   - `AllToolsets` is the aggregator that registers the full ~28-toolset palette. Without it you only get a useless `AgentSkillToolset`.
-2. In **`Config/DefaultEngine.ini`** append:
-   ```ini
-   [/Script/ModelContextProtocolEngine.ModelContextProtocolSettings]
-   ServerUrlPath=/mcp
-   ServerPortNumber=8123
-   bAutoStartServer=True
-
-   [/Script/PythonScriptPlugin.PythonScriptPluginSettings]
-   bRemoteExecution=False
+1. **Edit → Plugins** → search **"Unreal MCP"** → **Enabled** (auto-enables Toolset Registry) → restart. Also enable **AllToolsets** + **PythonScriptPlugin** for the full building palette (without AllToolsets you get a minimal, useless toolset).
+2. **Start the server** — easiest, no restart: open the console (**backtick** `` ` ``) and run:
    ```
-   - `bAutoStartServer` defaults **false** — enabling the plugin alone never starts the server.
-   - Port **8000** is often taken (WhisperFlow dictation, etc.) → we use **8123**.
-   - `bRemoteExecution=False` — a `True` value makes a multicast listener **hang the editor on boot** (macOS). Keep it False.
-3. **Fully quit + reopen** the editor (it reads this at startup; quitting also stops it clobbering Saved config). A C++ sample may prompt **"missing modules — rebuild?"** → **Yes** (that's the project's code, not the plugin).
+   ModelContextProtocol.StartServer 8123
+   ```
+   For every-launch auto-start: **Edit → Editor Preferences → General → Model Context Protocol → Auto Start Server** (set Port 8123). This is an Editor *Preference* (per-user config), NOT `DefaultEngine.ini`.
+3. **Generate the client config** (console): `ModelContextProtocol.GenerateClientConfig ClaudeCode` → writes `.mcp.json` to the project root; launch Claude Code from there.
 
 ## 4. Connect Claude Code
 With the project open and the server running, in Claude Code run `/mcp` to connect to `http://127.0.0.1:8123/mcp`.
