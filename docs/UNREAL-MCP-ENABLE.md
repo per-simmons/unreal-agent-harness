@@ -18,6 +18,11 @@
 > also enable **AllToolsets** + **PythonScriptPlugin** in Plugins. Without AllToolsets you only get a
 > minimal toolset and can't actually build.
 
+> **A note on the port (read this first).** The default MCP port is **8000**. **Most people can
+> leave it at 8000.** Change it only if something else already uses 8000 — which is common (other
+> Unreal projects, dictation apps like WhisperFlow, etc.). On this machine 8000 was taken, so we
+> use **8123** everywhere below. If 8000 is free for you, keep the default and ignore the 8123s.
+
 ### 2. Start the server
 **Manual (instant, no restart) — also the cleanest thing to show on camera:**
 1. Press the **backtick** key `` ` `` to open the editor **console** (bottom of the editor).
