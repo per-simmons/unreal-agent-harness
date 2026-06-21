@@ -1,0 +1,39 @@
+# Secrets — never commit
+.secrets.env
+*.env
+.env
+secrets/
+
+# Big / regenerable assets (GBs) — never commit
+assets/
+logs/
+demo/
+tool-results/
+
+# Binary media (regenerable)
+*.fbx
+*.obj
+*.glb
+*.gltf
+*.uasset
+*.umap
+*.zip
+*.png
+*.jpg
+*.jpeg
+*.hdr
+*.mp4
+*.gif
+
+# Python / OS cruft
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+venv/
+
+# UE project artifacts (the City Sample project lives on the SSD, not in this repo)
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/

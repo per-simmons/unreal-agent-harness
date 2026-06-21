@@ -1,0 +1,360 @@
+#!/usr/bin/env python3
+"""
+make_splat_tile.py  —  Wrap a Gaussian splat (.ply or .spz) as a minimal
+KHR_gaussian_splatting 3D Tiles tileset that our Cesium for Unreal v2.27 build
+(UE 5.8, built at ~/coding/cesium-build/cesium-unreal) loads via a single
+Cesium3DTileset actor.
+
+WHY THIS SHAPE (verified against the actual build source, not docs):
+  - Cesium's glTF reader has decodeSpz.cpp: when a primitive carries the
+    KHR_gaussian_splatting extension AND the
+    KHR_gaussian_splatting_compression_spz_2 sub-extension (a bufferView of raw
+    .spz bytes), the reader calls spz::loadSpz() on those bytes at load time and
+    expands them into the primitive's POSITION / KHR_gaussian_splatting:SCALE /
+    KHR_gaussian_splatting:ROTATION / COLOR_0 / SH accessors.
+    (cesium-native/CesiumGltfReader/src/decodeSpz.cpp)
+  - CRITICAL: the decoder OVERWRITES existing accessors; it does NOT create them.
+    So the glTF must already contain placeholder accessors (correct `count` =
+    numPoints) for every attribute, or the decode warns + drops that attribute.
+    That's why we read numPoints + shDegree from the .spz first.
+  - The primitive MUST have mode = POINTS (0), or CesiumGltfComponent.cpp's
+    loadGaussianSplats() skips it ("Primitive mode ... is not POINTS").
+  - We embed the raw .spz in the .glb so the tile is a single self-contained
+    file (~10x smaller than uncompressed attributes).
+
+OUTPUT:
+  <outdir>/
+    model.glb        — glB-binary glTF with the embedded SPZ + KHR ext
+    tileset.json     — minimal 3D Tiles 1.1 tileset pointing at model.glb
+
+LOAD IN UE: see splat/README.md (second Cesium3DTileset actor + shared
+CesiumGeoreference + Cartographic Polygon carve).
+
+USAGE:
+  python3 make_splat_tile.py INPUT.ply|INPUT.spz OUTDIR [--name NAME]
+
+This is pure-stdlib Python (json + struct). FOSS, Apple-Silicon friendly.
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import struct
+import subprocess
+import sys
+
+HARNESS = os.path.dirname(os.path.abspath(__file__))
+SPZ_BUILD = os.path.expanduser("~/coding/spz/build")
+PLY_TO_SPZ = os.path.join(SPZ_BUILD, "ply_to_spz")
+SPZ_INFO = os.path.join(SPZ_BUILD, "spz_info")
+
+# glTF component types
+FLOAT = 5126
+# glTF accessor types
+VEC3 = "VEC3"
+VEC4 = "VEC4"
+# glTF primitive modes
+POINTS = 0
+# glTF bufferView targets (none needed for splat data; reader reads raw bytes)
+
+
+def die(msg):
+    print(f"[make_splat_tile] ERROR: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def ensure_tools():
+    if not os.path.isfile(SPZ_INFO):
+        die(
+            f"spz_info not found at {SPZ_INFO}. Build it:\n"
+            f"  cd ~/coding/spz && cmake -B build -DSPZ_BUILD_TOOLS=ON "
+            f"-DCMAKE_BUILD_TYPE=Release && cmake --build build -j8"
+        )
+
+
+def to_spz(input_path, workdir):
+    """Return a path to a .spz, converting from .ply if needed."""
+    ext = os.path.splitext(input_path)[1].lower()
+    if ext == ".spz":
+        return input_path
+    if ext == ".ply":
+        if not os.path.isfile(PLY_TO_SPZ):
+            die(f"ply_to_spz not found at {PLY_TO_SPZ}; build the spz CLI tools.")
+        out_spz = os.path.join(workdir, "input.spz")
+        print(f"[make_splat_tile] converting .ply -> .spz ...")
+        subprocess.run([PLY_TO_SPZ, input_path, out_spz], check=True)
+        return out_spz
+    die(f"unsupported input extension: {ext} (want .ply or .spz)")
+
+
+def read_spz_meta(spz_path):
+    """Parse spz_info output for numPoints, shDegree, and the bounding box."""
+    proc = subprocess.run(
+        [SPZ_INFO, spz_path], capture_output=True, text=True, check=True
+    )
+    out = proc.stdout + "\n" + proc.stderr
+
+    m = re.search(r"numPoints=(\d+)", out)
+    if not m:
+        m = re.search(r"Number of points:\s*(\d+)", out)
+    if not m:
+        die(f"could not parse numPoints from spz_info:\n{out}")
+    num_points = int(m.group(1))
+
+    sm = re.search(r"shDegree=(\d+)", out)
+    sh_degree = int(sm.group(1)) if sm else 0
+
+    # Bounding box (in the .spz's own coordinate space). Used for the glTF
+    # accessor min/max + a sane tileset bounding box. Falls back to a 1m cube.
+    def axis(letter):
+        am = re.search(rf"{letter}:\s*(-?[\d.]+)\s+to\s+(-?[\d.]+)", out)
+        if am:
+            return float(am.group(1)), float(am.group(2))
+        return -0.5, 0.5
+
+    xmin, xmax = axis("X")
+    ymin, ymax = axis("Y")
+    zmin, zmax = axis("Z")
+    bbox = {
+        "min": [xmin, ymin, zmin],
+        "max": [xmax, ymax, zmax],
+    }
+    return num_points, sh_degree, bbox
+
+
+def build_glb(spz_path, num_points, sh_degree, bbox, name):
+    """
+    Build a glB whose single POINTS primitive carries:
+      - KHR_gaussian_splatting          (marks it a splat; default fields)
+      - KHR_gaussian_splatting_compression_spz_2 -> bufferView 0 (raw .spz bytes)
+    plus PLACEHOLDER accessors the decoder fills:
+      POSITION, KHR_gaussian_splatting:SCALE, KHR_gaussian_splatting:ROTATION,
+      COLOR_0, and per-degree SH coefficients.
+    The placeholder accessors point at a tiny zero bufferView; only their
+    `count` and `type` matter to the reader (it rebinds them to decoded data).
+    """
+    with open(spz_path, "rb") as f:
+        spz_bytes = f.read()
+
+    # ---- binary buffer layout ----
+    # [0]            the raw .spz blob (the compressed splat)  -> bufferView 0
+    # [pad to 4]     a tiny zero region the placeholder accessors point at
+    #                (1 element wide; the reader overwrites bufferView refs)
+    def pad4(n):
+        return (4 - (n % 4)) % 4
+
+    blob = bytearray()
+    spz_offset = 0
+    blob += spz_bytes
+    blob += b"\x00" * pad4(len(blob))
+    spz_len = len(spz_bytes)
+
+    # placeholder data region: 32 zero bytes is plenty for a 1-elem stub of any
+    # accessor type referenced below.
+    stub_offset = len(blob)
+    blob += b"\x00" * 32
+
+    bin_chunk = bytes(blob)
+
+    # ---- accessors ----
+    # We give each placeholder a stub bufferView (bufferView 1). The decoder
+    # reassigns accessor.bufferView to freshly decoded data, so the stub never
+    # gets read for real splat data. count MUST equal num_points.
+    accessors = []
+
+    def add_accessor(atype):
+        idx = len(accessors)
+        acc = {
+            "bufferView": 1,
+            "byteOffset": 0,
+            "componentType": FLOAT,
+            "count": num_points,
+            "type": atype,
+        }
+        accessors.append(acc)
+        return idx
+
+    pos_idx = add_accessor(VEC3)
+    # Give POSITION min/max so the runtime can compute a bound before decode.
+    accessors[pos_idx]["min"] = bbox["min"]
+    accessors[pos_idx]["max"] = bbox["max"]
+    scale_idx = add_accessor(VEC3)
+    rot_idx = add_accessor(VEC4)
+    color_idx = add_accessor(VEC4)
+
+    attributes = {
+        "POSITION": pos_idx,
+        "KHR_gaussian_splatting:SCALE": scale_idx,
+        "KHR_gaussian_splatting:ROTATION": rot_idx,
+        "COLOR_0": color_idx,
+    }
+
+    # Spherical-harmonic placeholders. Cesium keys on the presence of the
+    # highest-degree coef-6 / coef-4 / coef-2 attribute (see
+    # countShCoeffsOnPrimitive in CesiumGltfGaussianSplatComponent.cpp).
+    # Each SH coef accessor is VEC3 (xyz), count=num_points.
+    sh_coeffs_per_degree = {1: 3, 2: 5, 3: 7}
+    for d in range(1, sh_degree + 1):
+        for c in range(sh_coeffs_per_degree[d]):
+            sh_idx = add_accessor(VEC3)
+            attributes[f"KHR_gaussian_splatting:SH_DEGREE_{d}_COEF_{c}"] = sh_idx
+
+    gltf = {
+        "asset": {"version": "2.0", "generator": "make_splat_tile.py"},
+        "extensionsUsed": [
+            "KHR_gaussian_splatting",
+            "KHR_gaussian_splatting_compression_spz_2",
+        ],
+        "scene": 0,
+        "scenes": [{"nodes": [0], "name": name}],
+        "nodes": [{"mesh": 0, "name": name}],
+        "meshes": [
+            {
+                "name": name,
+                "primitives": [
+                    {
+                        "mode": POINTS,
+                        "attributes": attributes,
+                        "extensions": {
+                            "KHR_gaussian_splatting": {
+                                # All-default fields per the extension RC; the
+                                # SPZ sub-extension points at the raw blob.
+                                "kernel": "ellipse",
+                                "colorSpace": "srgb_rec709_display",
+                                "projection": "perspective",
+                                "sortingMethod": "cameraDistance",
+                                "extensions": {
+                                    "KHR_gaussian_splatting_compression_spz_2": {
+                                        "bufferView": 0
+                                    }
+                                },
+                            }
+                        },
+                    }
+                ],
+            }
+        ],
+        "accessors": accessors,
+        "bufferViews": [
+            {  # 0: the raw .spz blob
+                "buffer": 0,
+                "byteOffset": spz_offset,
+                "byteLength": spz_len,
+            },
+            {  # 1: tiny stub for placeholder accessors
+                "buffer": 0,
+                "byteOffset": stub_offset,
+                "byteLength": 32,
+            },
+        ],
+        "buffers": [{"byteLength": len(bin_chunk)}],
+    }
+
+    return gltf, bin_chunk
+
+
+def write_glb(gltf, bin_chunk, out_path):
+    json_bytes = json.dumps(gltf, separators=(",", ":")).encode("utf-8")
+    # pad JSON chunk to 4 with spaces, BIN chunk to 4 with zeros
+    json_pad = (4 - (len(json_bytes) % 4)) % 4
+    json_bytes += b" " * json_pad
+    bin_pad = (4 - (len(bin_chunk) % 4)) % 4
+    bin_chunk = bin_chunk + b"\x00" * bin_pad
+
+    total = 12 + 8 + len(json_bytes) + 8 + len(bin_chunk)
+    with open(out_path, "wb") as f:
+        f.write(b"glTF")
+        f.write(struct.pack("<I", 2))  # version
+        f.write(struct.pack("<I", total))
+        # JSON chunk
+        f.write(struct.pack("<I", len(json_bytes)))
+        f.write(b"JSON")
+        f.write(json_bytes)
+        # BIN chunk
+        f.write(struct.pack("<I", len(bin_chunk)))
+        f.write(b"BIN\x00")
+        f.write(bin_chunk)
+
+
+def write_tileset(bbox, glb_name, out_path, geometric_error=512.0):
+    """
+    Minimal 3D Tiles 1.1 tileset. One root tile -> model.glb (content).
+    Bounding volume = an axis-aligned box centered on the splat bbox, in the
+    tile's LOCAL space; Cesium positions/georeferences the whole tileset via the
+    Cesium3DTileset actor + shared CesiumGeoreference (see README §17b).
+    Geometric error governs when it streams in; tune in UE (§16) anyway.
+    """
+    cx = (bbox["min"][0] + bbox["max"][0]) / 2.0
+    cy = (bbox["min"][1] + bbox["max"][1]) / 2.0
+    cz = (bbox["min"][2] + bbox["max"][2]) / 2.0
+    hx = max((bbox["max"][0] - bbox["min"][0]) / 2.0, 0.5)
+    hy = max((bbox["max"][1] - bbox["min"][1]) / 2.0, 0.5)
+    hz = max((bbox["max"][2] - bbox["min"][2]) / 2.0, 0.5)
+    # 3D Tiles box: [cx,cy,cz, hx,0,0, 0,hy,0, 0,0,hz]
+    box = [cx, cy, cz, hx, 0, 0, 0, hy, 0, 0, 0, hz]
+
+    tileset = {
+        "asset": {"version": "1.1"},
+        "geometricError": geometric_error,
+        "root": {
+            "boundingVolume": {"box": box},
+            "geometricError": 0.0,
+            "refine": "ADD",
+            "content": {"uri": glb_name},
+        },
+    }
+    with open(out_path, "w") as f:
+        json.dump(tileset, f, indent=2)
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Wrap a .ply/.spz splat as a "
+                                 "KHR_gaussian_splatting 3D Tiles tileset.")
+    ap.add_argument("input", help="input .ply or .spz")
+    ap.add_argument("outdir", help="output directory for tileset.json + model.glb")
+    ap.add_argument("--name", default=None, help="display name (default: input stem)")
+    ap.add_argument("--geometric-error", type=float, default=512.0,
+                    help="root geometricError (default 512)")
+    args = ap.parse_args()
+
+    ensure_tools()
+
+    input_path = os.path.abspath(args.input)
+    if not os.path.isfile(input_path):
+        die(f"input not found: {input_path}")
+    outdir = os.path.abspath(args.outdir)
+    os.makedirs(outdir, exist_ok=True)
+    name = args.name or os.path.splitext(os.path.basename(input_path))[0]
+
+    workdir = os.path.join(outdir, ".work")
+    os.makedirs(workdir, exist_ok=True)
+    try:
+        spz_path = to_spz(input_path, workdir)
+        num_points, sh_degree, bbox = read_spz_meta(spz_path)
+        print(f"[make_splat_tile] points={num_points} shDegree={sh_degree} "
+              f"bbox={bbox}")
+
+        gltf, bin_chunk = build_glb(spz_path, num_points, sh_degree, bbox, name)
+        glb_path = os.path.join(outdir, "model.glb")
+        write_glb(gltf, bin_chunk, glb_path)
+
+        tileset_path = os.path.join(outdir, "tileset.json")
+        write_tileset(bbox, "model.glb", tileset_path, args.geometric_error)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+    glb_mb = os.path.getsize(glb_path) / 1e6
+    print(f"[make_splat_tile] wrote:")
+    print(f"  {glb_path}   ({glb_mb:.1f} MB, SPZ-compressed)")
+    print(f"  {tileset_path}")
+    print(f"[make_splat_tile] load via Cesium3DTileset 'Source: From URL':")
+    print(f"  file://{tileset_path}")
+    print(f"  (or serve {outdir} over HTTP and point the actor at the URL)")
+    print(f"[make_splat_tile] see {os.path.join(HARNESS, 'README.md')} for the "
+          f"UE wiring (second tileset + shared georeference + polygon carve).")
+
+
+if __name__ == "__main__":
+    main()
