@@ -1070,3 +1070,126 @@ window randomization for a true night-tower read.
   `SkyLight_0` (realtime capture on, intensity 3); new `ExponentialHeightFog_0` "DuskFog";
   `PostProcessVolume_0`/`_1` (EV -0.3, DOF off, Lumen reflection overrides, warm grade, bloom 1.2).
   Level + assets saved (`AssetTools.save_assets([])`).
+
+## 2026-06-21 — ITER 8: GLASS DISTRICT DROPPED INTO THE REAL PHOTOREAL CITY SAMPLE (agent `glass-in-citysample`)
+**Result: 14 sleek glass grammar towers placed INTO the actual photoreal `Small_City_LVL` downtown core
+— grounded on the real streets, taller than the surrounding City Sample buildings, reading as a
+futuristic glass financial district risen inside the real city. Pristine DEFAULT lighting left
+UNTOUCHED (no fog, no sun change, no SkyLight flag). All 14 closed (3 ISM each, 0 empties), no freeze.
+Keepers: `docs/glass_in_city_aerial.png` (sun-SIDE 3/4 aerial — blue/teal glass towers vivid against
+warm masonry, THE shot), `docs/glass_in_city_street.png` (street canyon — glass towers framing a
+photoreal limestone tower), `docs/glass_in_city_aerial_sunset.png` (sun-BEHIND 3/4 — heroes silhouette
+over the ocean sunset).**
+
+**THE BIG DIFFERENCE FROM ITERS 4-7: this time we built INTO `Small_City_LVL` itself, not the empty
+`Startup` map.** Iters 4-7's glass city lives in `/Game/Map/Startup/Startup`. This iter reused the SAME
+proven assets (`PCG_Building_CitySample` grammar graph + `FuturisticKit` glass modules + `M_TowerGlass`
++ the 17 `CityTiers/PCG_B_*` tier graphs) but spawned the `BP_BuildingSample` actors directly in the
+loaded photoreal City Sample level so they sit among real streamed buildings. The recipe is identical
+(spawn BP scale 13 → set `PCG.PCGGraphInstance.graph` to a tier graph → auto-regens to that height+tint);
+it just works in-place in the real city.
+
+**LOCATING THE DOWNTOWN CORE (no `find_actors` needed — it surfaces almost nothing in this WP level).**
+`find_actors` returns only spawners/zonegraph/PlayerStart/HLOD proxy at origin — NOT the streamed
+buildings. Use VISION + `trace_world` instead:
+  1. `CaptureViewport` (pass `captureTransform` explicitly — it has no default) from an oblique aerial
+     with a grid+axis annotation overlay (`gridSpacing:10000, gridExtent:300000, maxLabels:0`) → the
+     tall skyscraper cluster is clearly visible at **+X, Y≈0** (downtown sits NE of world origin; the
+     PlayerStart at (-29899,-101,169) is the SW residential edge). The core spans roughly **X 24000..56000,
+     Y -12000..12000**, street level **Z≈100-190**.
+  2. `SceneTools.trace_world` returns **DISTANCE from start**, not Z — so `groundZ = startZ - distance`.
+     Start a downward trace at z=30000: distance ~29800 → street (Z~100-200); a much smaller distance
+     → you hit a BUILDING ROOF (e.g. Z=7776 = a 78m roof). **THIS IS HOW YOU FIND STREET GAPS.**
+
+**THE DENSITY PROBLEM + THE FIX (the crux of placing into a real city).** City Sample downtown is
+WALL-TO-WALL buildings — there are no empty lots. Naively placing a tower at a grid point lands it ON
+TOP of an existing building (ugly interpenetration). **Fix: scan a trace grid first, keep only cells
+whose `groundZ < ~400` (= actual street/plaza, not a roof), then place towers only in those gaps.** A
+4000cm trace grid over the core (X 20000..60000 × Y -16000..16000) found **55 street cells out of 99**;
+hand-picked 14 well-separated ones near the core for the cluster. Even so a 34m footprint centered on a
+street point can clip a neighbour — pick cells with low-Z neighbours where possible; minor base overlap
+reads fine since the glass towers are much taller (new-construction look).
+
+**GROUNDING: trace each pick, set actor Z = that street groundZ.** The kit is base-pivoted (z-min≈0) so
+actor Z = street Z puts the base on the road. Verified per tower via `get_actor_bounds` zmin (all -27..118
+≈ street). Do NOT use spawn `snap_to_ground` — on a FRESH BP spawn only the billboard exists (the PCG
+building hasn't generated yet), so it would snap the billboard, not the tower.
+
+**HEIGHTS — out-top the City Sample core for a futuristic accent.** Existing downtown reaches ~150-200m.
+Made 2 hero supertalls by duplicating the Signature tier graphs and bumping `userParameters.buildingHeight`:
+`PCG_B_Silver_Hero` (28000cm = **279m**), `PCG_B_Blue_Hero` (22000cm = **219m**). Cluster height ladder
+(verified by `get_actor_bounds`): 279m + 219m heroes (dominate everything) · 159m + 139m Silver/Blue
+Signatures (match the tallest existing) · 5× 89m Tall · 4× 59m Mid (sit among the mid-rise = integrate).
+14 towers, 5 tints (Silver/Blue/Teal/Amber/Warm via the per-tint tier graphs) scattered for variety.
+
+**SPAWN RECIPE (copy verbatim):** one test tower first to validate (spawn → set graph → wait ~6s →
+`get_actor_bounds`+`get_components` → confirm 3 ISM + zmax≈buildingHeight + zmin≈street). Then batch the
+rest in ONE `execute_tool_script` (spawn + set-graph per tower, serial). Wait ~10s for the async regens,
+THEN verify ISM/empties in a SEPARATE script (regen is async — an immediate read shows pre-regen). Got
+14/14 closed, 0 empty, no freeze. Foldered all under outliner `FuturisticGlassDistrict`
+(`SceneTools.set_actor_folder`).
+
+**LIGHTING — DELIBERATELY UNTOUCHED (the brief's hard constraint, and the FASTEST-PATH lesson).**
+`Small_City_LVL`'s default is already the warm photoreal coastal golden look. Added BUILDINGS ONLY — no
+fog, no sun rotation, no SkyLight realtime flag, no PPV. The towers inherit the real city's lighting and
+sit seamlessly in it. (Iters 4-7's whole lighting saga was for the empty Startup map; in the real city
+you must NOT touch it or you white-wash the pristine look — confirmed in CITY-SAMPLE-PLAYABLE.md.)
+
+**HONEST VISION READ:**
+  - ✅ It genuinely reads as a futuristic glass district risen inside a photoreal city. The **sun-SIDE
+    aerial** is the money shot — vivid blue/teal reflective curtain-wall towers pop against the warm
+    photoreal masonry (cool-glass-vs-warm-stone contrast sells "modern district in an old city"). The
+    **street canyon** shot frames a real City Sample limestone tower between our glass towers = perfect
+    integration read. Towers are grounded and correctly scaled (heroes clearly out-top the core).
+  - ⚠️ **Angle-dependent: from the sun-BEHIND side the glass goes near-black** (M_TowerGlass is dark
+    reflective dielectric — iter7's deliberate look — so with the sun behind it the faces read as dark
+    monoliths, not glittering glass). The blue/teal tints read as glass from every angle; Silver/Warm go
+    darkest. For a hero still, shoot the sun-SIDE. (Can't fix via lighting here — that's off-limits.)
+  - ⚠️ Some bases sit tight against neighbours (downtown has no real lots) — minor clip on a couple, not
+    visible in the keepers. The shorter 59-89m towers blend INTO the skyline rather than standing out
+    (intended for integration, but means only ~6 of the 14 read as obviously "new/futuristic" at a glance).
+  - ⚠️ Faint yellow editor world-bounds wireframe line in the aerials (editor artifact, crop for a clean
+    still; `SelectActors([])` doesn't clear the world-bounds line).
+
+**NEXT LEVER (priority):** (1) A few more clearly-glass tints lighter than the dark base (the blue/teal
+read best — lean into cooler/lighter tints so towers pop sun-behind too, WITHOUT touching scene lighting —
+do it in the per-tint MIs). (2) Bump a couple more towers to Signature/Hero height so MORE than ~6 read as
+new construction. (3) Roofline crowns/setbacks (grammar boxes are flat-topped). (4) If a brighter glass
+read is wanted, a tower-LOCAL bounded PostProcessVolume / brighter emissive on the MIs (local, won't
+touch the city's pristine global lighting).
+
+  **New assets:** `PCG_B_Silver_Hero` (28000) + `PCG_B_Blue_Hero` (22000) in `/Game/PCG/CityTiers/`.
+  **New actors:** 14 `BP_BuildingSample` in `Small_City_LVL`, outliner folder `FuturisticGlassDistrict`
+  (1 named `GlassTest_0` = the central 279m Silver hero; 13 named `Glass_*`). Cluster center ≈ (40000,0),
+  spread X 26000..56000 / Y -12000..16000, all grounded on traced street Z. Level + assets saved.
+
+- **2026-06-21 — MORE + LIGHTER GLASS pass (NEXT-LEVER items 1+2 done, agent `glass-in-city`).** Pat: more
+  glass towers, and the current ones go near-black sun-behind. Did it WITHOUT touching scene lighting:
+  - **Lighter/cooler tints — in the per-tint MIs ONLY (`/Game/PCG/GlassTints/MI_Glass_{Blue,Teal,Amber,
+    Silver}`).** The lever is the `GlassTint` VECTOR param (each MI also has `WindowTint`). It MULTIPLIES the
+    base M_TowerGlass dark-glass BaseColor, so raising it lifts the whole face — the fix for the sun-behind
+    near-black. Set via `MaterialInstanceTools.set_vector_parameter(name="GlassTint", value=LinearColor)`.
+    Values RAISED well above 1 (HDR-style multipliers, cooler): Blue (0.7,0.85,1.4)→(1.3,1.5,2.2),
+    Teal (0.55,1.1,1.05)→(1.4,2.0,2.1), Amber (1.25,0.95,0.65)→(1.6,1.5,1.3), Silver (1.0,1.05,1.25)→
+    (2.1,2.2,2.5). Blue stayed the strongest "reads-as-glass-from-every-angle" tint; Silver needed the
+    biggest lift to stop going dark. **MI vector edits hot-apply — no PCG re-spawn needed** (the live ISMs
+    pick up the MI change immediately; recapture confirmed).
+  - **8 MORE towers** (14→**22**), favoring tall tiers so the district clearly reads as new construction:
+    spawn `/PCG/SampleContent/Grammar/BP_BuildingSample` via `add_to_scene_from_asset` at scale **13×13×1**
+    (matches existing) on clean street cells, then point each one's height/tint by setting its
+    `<actor>.PCG.PCGGraphInstance` `Graph` to a `/Game/PCG/CityTiers/PCG_B_<Tint>_<Height>` tier graph —
+    **the BP auto-regenerates on that property edit** (no ExecuteGraphInstance; it's a BP-component PCG, not
+    a PCGVolume). Used Hero (Silver 280m / Blue 220m), Signature (140m), Tall (220m). Verify each via
+    `get_actor_bounds` (Hero → z-max ≈ 27900; Tall ≈ 22000) AFTER the set — height only takes on the regen.
+  - **⚠️ GROUND CELLS: trace first, skip rooftops.** `SceneTools.trace_world` straight down (start z=20000 →
+    end z=-2000; groundZ = 20000 − returned distance) at each candidate cell. Downtown is DENSE — several
+    grid cells land on existing City-Sample ROOFTOPS (groundZ read ~900-7000, way above the ~100-300 street
+    level). Drop those cells; only place where groundZ ≈ 100-300. The existing grid is X∈{26472,30472,...,
+    50472} step 4000, Y∈{-12141,-8141,-4141,-141,7858,11858} — fill the EMPTY street cells in/around it.
+  - **HONEST RESULT (multi-angle):** sun-side aerial = big vivid blue/silver glass district, Heroes out-top
+    the core, clearly "new construction." Sun-BEHIND aerial = the blue glass now holds its color + window
+    grid (no longer black slabs) — categorical improvement over the prior pass's near-black. The very tallest
+    backlit towers dead-center between camera and the bright sky still read dim — that's correct backlighting,
+    NOT a bug; pushing tints higher to "fix" it would look unnaturally emissive. Captures:
+    `docs/glass2_aerial.png` (3/4), `docs/glass2_sunbehind.png` (the hard angle), `docs/glass2_street.png`
+    (street canyon, clear sky). Level + MIs saved (`save_assets([])`).
