@@ -9,7 +9,8 @@ Start with **[00-GETTING-STARTED.md](00-GETTING-STARTED.md)**. Then jump to what
 - [programmatic-toolset-capabilities.md](programmatic-toolset-capabilities.md) — batching many tool calls in one sandboxed script.
 
 ## 🗽 Real-world cities (Cesium)
-- [cesium-for-unreal.md](cesium-for-unreal.md) — stream Google Photorealistic 3D Tiles (real NYC, anywhere).
+- [NYC-CESIUM-WALKTHROUGH.md](NYC-CESIUM-WALKTHROUGH.md) — **the step-by-step demo**: stream real NYC start to finish (plugin → Google 3D Tiles key → georeference → rebase → sun/sky → fly). Works for any city.
+- [cesium-for-unreal.md](cesium-for-unreal.md) — Cesium actor/property/function *reference*.
 - [cesium-rebase-solution.md](cesium-rebase-solution.md) — the georeference/origin-rebase so tiles render at the origin.
 - [cesium-splat-subsystem-disable.md](cesium-splat-subsystem-disable.md) — disabling the crashing gaussian-splat tick subsystem.
 - [khr-gaussian-splatting.md](khr-gaussian-splatting.md) — gaussian-splat tile format notes (see also `../splat/`).
