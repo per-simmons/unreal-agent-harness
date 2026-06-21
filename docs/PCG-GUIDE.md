@@ -1513,3 +1513,25 @@ false before switching).
   7. Street: pavement ground + road + sidewalk planes (materials via StaticMeshComponent `OverrideMaterials`), then
      City Sample trees/cars/lamps/benches rows. Bright daylight (sun warm ~intensity 11, EV ≈ −0.4 for light stone,
      MotionBlur 0). PlayerStart on the sidewalk.
+
+- **2026-06-21 — PARIS BLOCK DETAIL PASS (flat → carved stone), agent `paris-detail`.** Realism upgrade on the
+  SAME `ParisBlock_LVL`. Before/after captures `docs/parisblock_detail_BEFORE_*` → `_FINAL_*`. **Full ranked recipe
+  + every gotcha is in [REALISM-GUIDE.md](REALISM-GUIDE.md) → "THE PARIS-BLOCK DETAIL PASS".** PCG-specific
+  takeaways:
+  - **Upgrade the SHARED master material, never re-point per-building meshInfo for surface looks.** All 10 buildings
+    use tinted MIs of `/Game/PCG/ParisVariants/M_ParisStone`; adding albedo-texture + hand-rolled normal
+    (`DeriveNormalZ` from 3 height samples) to that master textured every building at once, tones preserved. New
+    textures in `/Game/PCG/ParisDetail/Tex`; decal materials in `/Game/PCG/ParisDetail/Decals`; 25 grime
+    `DecalActor`s under outliner folder `ParisBlock/Decals`.
+  - **Decals project onto PCG/ISM facades fine** (ISM `bReceivesDecals` true) — `DecalActor` projects along **+X**:
+    north-row wall (faces −Y) = **yaw 90**, south-row (faces +Y) = **yaw −90**, actor ~100cm in front,
+    `decalSize.x ≥ 400`. Imported decal PNGs come in as `TC_EditorIcon` → set `TC_Default`; decal BaseColor must be a
+    neutral dark CONSTANT (the generated soot/stain RGB is warm → paints walls red), use texture only for the alpha mask.
+  - **⚠️ The detailed-geometry swap (`beaux_arts_kit/detailed/` → `/Game/PCG/ParisDetailGeo`, Nanite on) is BLOCKED
+    by BP-component regen.** Re-pointing graph `userParameters.meshInfo` / the graphInstance / `seed` / a full level
+    reload does NOT re-execute a `BP_BuildingSample` PCG (GenerateOnLoad output is cached/serialized);
+    `ExecuteGraphInstance` errors "not a valid PCGVolume" on BP actors. Data is staged (C_3/`PCG_B2` → `B2det_*`
+    copies, WarmGrey tone) and the block is intact, but the live swap needs the editor UI / a fresh spawn. **Confirm
+    a swap via `ObjectTools.get_properties(ISM, ["StaticMesh"])`, NOT the ISM component name (names are sticky).**
+    Lesson: for these grammar buildings, do all SURFACE realism in the shared material (regen-proof) and only attempt
+    geometry swaps when you can drive the BP regen.

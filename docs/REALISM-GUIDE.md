@@ -61,3 +61,73 @@ Because there is **one editor** (concurrent edits freeze it), split the work:
 - [ ] Trees + vehicles + street props on real ground/sidewalks
 - [ ] Exposure tuned to the material; MotionBlur 0; no fog white-out
 - [ ] QA-looped from 3 angles until it actually looks real
+
+## 2026-06-21 — THE PARIS-BLOCK DETAIL PASS (what actually moved the needle) — agent `paris-detail`
+> Took `ParisBlock_LVL` from flat grey-brown "painted-drywall" facades to textured carved limestone with grime.
+> Before/after: `docs/parisblock_detail_BEFORE_{street,facade}.png` → `docs/parisblock_detail_FINAL_{street,facade,aerial}.png`.
+> **Ranked by bang-for-buck (do them in THIS order):**
+
+**1. REBUILD THE SHARED MATERIAL, don't re-point meshes (the #1 fix, ~80% of the win).** Every building
+already used tinted MIs of ONE master (`/Game/PCG/ParisVariants/M_ParisStone`). So adding an **albedo texture
++ a normal map to that master upgraded all 10 buildings at once** while every per-building tone MI survived
+(StoneColor/GrimeColor/Rough params kept). This is far cheaper + safer than touching geometry. Recipe:
+- Import the albedo + a grayscale height (TextureTools.import_file). **Set the HEIGHT texture `SRGB=false`**
+  or the material won't compile ("Sampler type is Linear Color, should be Color").
+- BaseColor = `existing tint Lerp` × `Albedo.RGB × ~1.75` (the ×1.75 brightens mid-grey albedo back to the
+  tint's value so the textured stone keeps its tone instead of going dark).
+- **Normal (the carved-stone lever) — no NormalFromHeightmap function needed** (the engine MaterialFunction
+  isn't in every install). Hand-roll it: sample height at UV, UV+(du,0), UV+(0,dv); `dx=hx.R−h0.R`,
+  `dy=hy.R−h0.R`; ×(−strength≈0.3, see below); `AppendVector(dx,dy)` → **`MaterialExpressionDeriveNormalZ`** (input pin
+  `InXY`) → MP_Normal. Cheap, robust, reads as real relief.
+  - **⚠️ CALIBRATE THE STRENGTH BY EYE — easy to overcook into sandpaper; the number that "sounds subtle"
+    is still too high.** strength=8 made the limestone read as coarse gravel/popcorn. strength=1.5 was logged
+    as "the keeper" but **it STILL read as all-over sandpaper grain in-level** (proven 2026-06-21 — facade
+    close-ups showed crusty popcorn stone, not ashlar). **strength ≈ 0.3 is the real keeper** (-0.3 in the two
+    strength Constants — `M_ParisStone:MaterialExpressionConstant_1` + `Constant_2`, signed for the −strength
+    direction). At 0.3 the surface is smooth fine limestone and the carved ARCHITECTURAL relief (window frames,
+    sills, cornices, quoins, ashlar courses) carries ALL the detail — the surface normal only whispers at the
+    block joints. **Lesson: tune normal strength by eye against an actual facade-close capture — too high reads
+    as gravel, and a value that looks reasonable as a number (1.5) can still be ~5x too strong on screen. Drop
+    it 4-6x at a time and re-capture until the stone reads SMOOTH, not "lots of relief."** Also drop the
+    albedo/height `TextureCoordinate` UTiling/VTiling to ~2 (not 3) so blocks are bigger / less busy.
+    (Captures: `docs/parisblock_fix_BEFORE_facade.png` = strength 1.5 sandpaper; `docs/parisblock_fix_AFTER_close.png`
+    + `_AFTER_facade.png` + `_AFTER_aerial.png` = strength 0.3 smooth ashlar keeper.)
+- UVs: a `TextureCoordinate` with UTiling/VTiling ≈3 gave believable stone-block scale on 400cm modules.
+- Surface-type variety for free: override the **`Albedo` texture param** on a few of the existing tone MIs
+  (weathered-limestone on the grey/soot tones, warm-plaster on the beige) → different buildings read as
+  genuinely different stone, no new materials.
+
+**2. GRIME — bake it into the material AND scatter decals (belt + suspenders).**
+- **Decals DO work on PCG/ISM facades** (ISM `bReceivesDecals` defaults true) — the trap is purely
+  ORIENTATION + the decal box not reaching the wall. A `DecalActor` **projects along its local +X.**
+  Wall facing −Y (e.g. a north row's boulevard face) → **yaw 90**; wall facing +Y → **yaw −90**. Place the
+  actor ~100cm IN FRONT of the wall and set `decalSize.x` (projection depth) big enough to reach it
+  (≥400). Verify with a bright-red full-opacity test decal first — if you see only the editor sprite, the
+  box is missing the wall or the projection axis is backwards.
+- **Imported decal PNGs default to `CompressionSettings=TC_EditorIcon`** (small RGBA → treated as a UI
+  icon) and render wrong. Set them to **`TC_Default`** after import.
+- Decal material = `MaterialDomain=MD_DeferredDecal`, `BlendMode=BLEND_Translucent`, BaseColor=a **neutral
+  dark constant** (NOT the texture RGB — the generated soot/stain PNGs carry warm/red RGB that paints the
+  wall blood-red), Opacity = `texture.A × scale`. Use the texture only for the alpha MASK shape.
+- Material-baked grime (survives any regen, needs no actors): planar-project the soot texture via
+  `WorldPosition → ComponentMask(R,B) → ×~0.0011`, then `BaseColor ×= lerp(1.0, neutralGrime≈0.40, soot.A×0.5)`.
+  **Use the soot ALPHA as the mask + a NEUTRAL grime color** — multiplying the colored soot RGB straight into
+  BaseColor turns shadows red (hard-won twice).
+
+**3. ORNAMENT GEOMETRY swap — staged but the live regen is the wall (lower priority, do last).** Imported the
+`beaux_arts_kit/detailed/` modules (Nanite on), made per-building tinted copies, re-pointed a building's
+grammar `meshInfo`. The DATA stages fine + the block doesn't break, BUT **a BP-component PCG (BP_BuildingSample)
+will NOT re-generate via MCP** — not via graph `userParameters`, not via the graphInstance, not via a `seed`
+bump, not even via a full level reload (GenerateOnLoad output is serialized/cached). `ExecuteGraphInstance`
+errors "not a valid PCGVolume" on BP actors. So the detailed-geo swap needs the editor UI (or a rebuilt
+spawn) to land — material+decals already deliver the dominant realism, so swap geometry only when you can
+drive the regen. Don't burn the budget fighting it; confirm ISM mesh refs with
+`ObjectTools.get_properties(ISM, ["StaticMesh"])` (NOT the ISM component NAME — names are sticky/stale).
+
+**Exposure for textured stone:** once the flat color became a textured albedo it read a touch dark — raised
+both unbound PPVs' `Settings.autoExposureBias` from −0.4 to **+0.3** (AEM_Manual; sign rule: higher = brighter)
+→ warm, legible limestone, no white-out.
+
+**Capture loop mechanics:** `CaptureViewport` blows the token cap → it auto-saves base64 to a tool-result
+`.txt`; decode with `docs/../decode_capture.py <txt> <out.png>` then Read the PNG. Pass `captureTransform`
+explicitly (it has no default) and an all-zero `annotations` to disable overlays.
