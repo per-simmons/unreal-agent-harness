@@ -320,3 +320,22 @@ That's the whole demo. Nothing was built — the city *is* the game.
 
 **Pre-flight (read-only) before a live run:** confirm `Small_City_LVL` loads, SM6/Nanite on,
 shaders fully compiled (watch the compiling counter), project is on the T7 Shield SSD.
+
+---
+## FASTEST PATH to the demo's photoreal look (verified 2026-06-21)
+The Unreal demo's photoreal city IS City Sample. The fastest way to that exact look — no PCG, no building:
+1. With the City Sample project open + MCP connected, run:
+   `SceneTools.load_level` → `/Game/Map/Small_City_LVL`  (NEVER Big_City for a demo — too heavy).
+2. Let shaders compile + World Partition stream (a few min; looks rough until done).
+3. Result: a photoreal downtown-on-a-peninsula, sun on the ocean, warm light — the demo's coastal frame. (`docs/citysample_pristine.png`)
+4. It's PLAYABLE out of the box: press Play → WASD walk, C enter/drive a car.
+
+### LIGHTING LESSON (learned the hard way 2026-06-21)
+- **Small_City's DEFAULT lighting is already the warm late-afternoon "golden-ish" look.** Leave it alone.
+- Do NOT "add golden hour" by dropping the sun very low (~-11°) — at that angle this scene's SkyAtmosphere scatters into a total white-out. And do NOT add an ExponentialHeightFog at default density (~0.02) over this huge city — also white-out. And enabling SkyLight `bRealTimeCapture` without a reachable SkyAtmosphere throws a warning + floods ambient.
+- If you over-tweak and wash it out: **reload the level** (`load_level` again) to discard unsaved lighting changes → pristine default restored. (Don't save the level if you want to keep the default.)
+- If you genuinely want a touch warmer: a GENTLE unbound PostProcessVolume (Manual exposure ~0, WhiteTemp ~5500, bloom ~1.1) — color only, NO fog, NO low sun. Test before relying on it.
+
+### "I fall below the water / through the ground" when navigating
+- That's the **editor flycam — it has NO collision**, so flying down passes through streets, ground, and below the water plane. Normal editor behavior, not a bug.
+- To stay grounded (walk the streets, not clip through): **press Play** — the City Sample character has collision and stands on the ground; you won't sink below the water.
