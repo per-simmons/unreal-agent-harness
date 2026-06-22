@@ -1535,3 +1535,144 @@ false before switching).
     a swap via `ObjectTools.get_properties(ISM, ["StaticMesh"])`, NOT the ISM component name (names are sticky).**
     Lesson: for these grammar buildings, do all SURFACE realism in the shared material (regen-proof) and only attempt
     geometry swaps when you can drive the BP regen.
+
+## 2026-06-21 — ART-DECO BLOCK: gleaming-bronze-vs-stone wedding-cake setbacks (agent `artdeco-block`)
+**Result: ONE genuinely Chrysler-era 1920s-30s Art-Deco BLOCK in a NEW level `/Game/Map/ArtDecoBlock_LVL` — 8
+wedding-cake SETBACK towers (3 stacked narrowing tiers each) capped with dramatic bronze CROWNS (ziggurat/spire/
+fluted), warm normal-mapped limestone with per-building tone variation, and REAL gleaming-bronze ornament (slot 1)
+vs matte stone — the contrast the v1 `ArtDeco_LVL` lacked. Standalone clean block, playable. Keepers:
+`docs/artdecoblock_hero_final.png` (3/4 sunlit hero), `docs/artdecoblock_street3.png` (boulevard-canyon money shot),
+`docs/artdecoblock_aerial7.png` (setback skyline), `docs/artdecoblock_tower1_bronze3.png` (close — gleaming bronze
+sunbursts/grilles/bands vs stone).**
+
+This extends the ParisBlock realism template; only the Art-Deco-specific deltas are logged here.
+
+**1) THE DETAILED KIT'S 2 MATERIAL SLOTS WERE COLLAPSING TO 1 ON EVERY IMPORT — root cause was the BUILDER, not UE
+(the key find; the same bug hit the flat kit + v1).** `assets/art_deco_kit/detailed/` (14 carved modules, builder
+`art_deco_detailed_jobs.py`) is authored with slot0=Stone / slot1=Bronze and per-face `material_index` (bronze on all
+ornament). But every UE import gave ONE slot (`M_Stone`), no `M_Bronze` → impossible to make the bronze a distinct
+metal. Proved it was the builder: `finalize()` called `me.materials.clear()` before re-appending stone+bronze, and
+**`materials.clear()` resets every face's `material_index` to 0** — collapsing all bronze faces into stone. In-memory
+distribution was correct ({0:30 stone, 1:150 bronze} for wall_c) until `clear()` → {0:180}. **Fix = delete the
+`me.materials.clear()` line** (mesh starts with 0 slots; just append stone→0, bronze→1 to match the indices already on
+the faces). Verified the bronze indices survive the bevel ({0:342,1:1050} after). Re-ran builder → all 14 FBX now
+import with TWO slots `["M_Stone","M_Bronze"]`. **Lesson: if a multi-material Blender export imports as 1 slot in UE,
+check the builder isn't clearing the slot list after assigning per-face material_index — verify the in-memory
+`Counter(p.material_index)` has >1 key BEFORE export, don't assume it's a UE import flag.** (A 2-separate-mesh-object
+FBX also imports as 2 slots — a valid alternate fix — but fixing the index-clear at source is cleaner.)
+
+**2) MATERIALS — warm limestone + a HARD-leaning gleaming bronze.**
+  - `M_ArtDecoStone`: `artdeco_limestone_albedo` × `StoneColor`/`GrimeColor` WorldZ-grime lerp → BaseColor;
+    `artdeco_limestone_height` → **NormalFromHeightmap** (intensity **0.4** — keep LOW like the Paris keeper ~0.3; 1.5 still read faintly gravelly, 8 is sandpaper) → Normal;
+    tiling 2.0, Rough 0.72. **Height tex must be sRGB=OFF + the TextureObjectParameter SamplerType=`LinearColor`** or
+    NormalFromHeightmap errors "sampler should be Linear Color." 4 tone MIs (Honey/Terracotta/PaleGold/Sooted) — push
+    value+hue apart (PaleGold at 0.78 read near-WHITE backlit; dropped to 0.66,0.56,0.36 honey-gold).
+  - `M_ArtDecoBronze`: `bronze_brushed_albedo` × warm `BronzeTint`, **Metallic 1.0, Roughness 0.20** (sharp highlight),
+    + a small **warm Emissive** (albedo×tint × `EmissiveStrength` 0.18). **The emissive is what makes bronze read as
+    GLEAMING METAL in shadowed recesses instead of going black** — polished metal under a clear sky reflects the dark
+    ground/sky and reads dark; a touch of emissive (NOT a lightbulb) + bright tint (2.2,1.5,0.7) + SkyLight 1.6 makes
+    the sunbursts/grilles/chevron-bands/crowns glint gold against the matte stone. This contrast is THE deco signature.
+
+**3) WEDDING-CAKE SETBACK MASSING = STACK 3 grammar-building actors per tower (the #1 deco tell).** No grammar surgery
+— each tier is its own `BP_BuildingSample` on its own tier graph, stacked: base (scale ~14, ~9 floors) at Z=0 → mid
+(0.71×scale) at Z=base.height → top (0.46×scale) at Z=base+mid.height. Each tier's actor offset re-centers its
+footprint on a shared (cx,cy): footprint-center-rel-to-actor scales with S — measured (1712,152)·S/14 for this kit, so
+`actor=(cx−1712·S/14, cy−152·S/14)`. Verified a tower: base 39m→mid 28m→top 18m wide, co-centered ±50cm, stacked to
+~88m. Per-tier DIFFERENT module mix (corner/wall/window picks) + different tone set = variety within one tower.
+
+**4) VARIETY: 4 tone-mesh SETS × per-building tier graphs.** Duplicated the 14 modules into 4 tone folders
+`/Game/PCG/ArtDecoDetailed/Tints/<Honey|Terracotta|PaleGold|Sooted>/` with the tone MI on slot M_Stone + M_ArtDecoBronze
+on slot M_Bronze (56 copies). 24 tier graphs (8 buildings × base/mid/top), each a dup of the base sample grammar with a
+distinct `meshInfo`=[corner,wall,window,window] pick from one tone set + its `buildingHeight`. 8 buildings, 2 rows of 4
+along an avenue, varied base scale 13-15 + varied heights → no two alike.
+
+**5) CROWNS = separate detailed-mesh actors at each top-tier Z-max (same safe recipe as v1/Paris).** `crown_a_ziggurat`/
+`crown_b_spire`/`crown_c_fluted_cap` (varied per building), scaled **per-building** to `0.62×top-tier-width/400` (fixes
+v1's single global scale that overhung narrow towers), at the top tier's footprint center, z=bounds.max.z−40, bronze.
+
+**6) THE CITY-SAMPLE BACKDROP BLEEDS IN — RELOCATE, don't fog.** The Startup-dup carries the full City Sample
+`Small_City` as World-Partition streamed actors that `find_actors`/`GetVisibleActors` do NOT enumerate (so you can't
+delete them by refPath) but that DO render. At world origin my block sat INSIDE the city core — white modern towers
+co-located beside it, clashing with the 1929 warm stone. **Fog can't fix co-located clutter** (tried; only hazes
+distance). **Fix = relocate the whole block to empty terrain: offset ALL my actors by +250,000cm XY (≈2.5km, clears the
+~2km Small_City) onto my own ±600m pavement plane.** Clean standalone block, nothing behind it.
+
+**7) ⚠️ THE WORST GOTCHA — `set_actor_transform` with location-only SILENTLY RESETS SCALE TO 1.** Despite the schema
+saying unset fields = "don't change," moving 79 actors with only `location` set **reset every actor's scale to {1,1,1}**
+— collapsing all 24 grammar footprints to single-bay thin columns and shrinking crowns/road/sidewalks/ground/decals.
+Caught it in aerial QA (towers read as thin spires; a base that was 39m wide measured 3.8m). **Fix: ALWAYS pass the full
+intended `scale` (and rotation) in every `set_actor_transform`, even a pure move.** Restored all scales by re-deriving
+them (tiers 13-15 + 0.71/0.46 sub-tiers; crowns from each top width; road 380×46; sidewalks 380×28; ground 1200; decals
+12×9×9). After restore: all 24 tiers 4-ISM closed, setbacks back, verified.
+
+**8) LIGHTING/PLAYABLE.** Warm sun (intensity 11, Temp 5600, pitch −45, yaw 40); SkyLight 1.6 (lifts the metal); both
+unbound PPVs AEM_Manual, MotionBlur 0; **EV −0.8** (the relocated bare-ground scene wanted a darker key than the City
+Sample one — +0.3 blew the light pavement white). Base `GameModeBase` (DefaultPawn WASD); PlayerStart on the south
+sidewalk — PIE verified DefaultPawn spawns grounded (z 215-285) at the start. (NOTE: the PlayerStart did NOT travel with
+the folder-move — re-placed it manually at the relocated block.)
+
+  **Assets (saved):** level `/Game/Map/ArtDecoBlock_LVL`; kit `/Game/PCG/ArtDecoDetailed/mod*` (14, 2-slot) +
+  `M_ArtDecoStone`/`M_ArtDecoBronze` + `Tones/MI_Stone_*`(4)+`MI_Bronze_Verdigris` + `Tints/<tone>/*`(56) + `Tex/`(7) +
+  `Decals/M_Decal_*`(3) + `Street/M_AD_*`(3); 24 tier graphs `/Game/PCG/ArtDecoTiers/PCG_B*_{base,mid,top}`. **Actors:**
+  24 `BP_BuildingSample_C_3..26` + 8 `StaticMeshActor_2..9` crowns + road/2 sidewalks/ground + 12 lamps + 6 cars + 24
+  decals + PlayerStart, at world ~(250000,250000), outliner folder `ArtDecoBlock`. Builder fix in
+  `art_deco_detailed_jobs.py` (removed `me.materials.clear()`).
+
+### Art-Deco block — DETAIL-STRATEGY COURSE-CORRECT (2026-06-21, Pat's call)
+**The GPT-generated tiling + crack/soot decals read FAKE. Replaced them — detail must come from carved geometry +
+City Sample's SCANNED materials + Lumen, NOT generated textures or scattered crack decals.**
+- **Stone:** dropped the generated `M_ArtDecoStone` tiling for City Sample's scanned limestone
+  `/Game/Building/Material/MI/Block/MI_Bldg_Block_Limestone_{Beige,Brown,BrownDark}` (real scanned C + AORMD-packed +
+  N maps — far better than gen tiling). Assigned to each kit mesh's `M_Stone` slot. Per-building tone = Beige (lightest,
+  warm) vs Brown across the 8. **`_BrownDark` is too dark — reads as a black silhouette; use Beige/Brown.**
+- **Bronze:** dropped the generated `M_ArtDecoBronze` for City Sample's scanned `…/Metal/MI_Bldg_Metal_Brass` (warm gold
+  scanned metal, gleams correctly) on the `M_Bronze` slot. `MI_Bldg_Metal_CopperOx` = oxidized/verdigris for aged
+  accents; `MI_Bldg_Metal_Copper`/`_GoldMatte` also available. These are all `/Game/Building/Material/MI/Metal/…`.
+- **Decals:** REMOVED all crack-network + soot-streak decals (they read as obvious fakery). Kept only ~6 very subtle
+  verdigris-run streaks near bronze (opacity 0.35). **Rule: gen crack/grime decals are NOT the detail driver — geometry
+  + scanned materials + light are. If in doubt, skip decals.**
+- **Lumen:** forced `DynamicGlobalIlluminationMethod=Lumen` + `ReflectionMethod=Lumen` + AO (intensity 0.6, radius 80)
+  on the PPVs so the deep carved relief catches GI/shadow — that's what sells carved ornament.
+- **Exposure:** the scanned limestone is DARKER than the gen albedo → it needs a BRIGHTER key (EV +0.5), not the −0.8
+  the gen materials wanted. Re-tune exposure whenever you swap the base material's brightness.
+- Keepers: `docs/artdecoblock_scanned_hero.png`, `_scanned_facade.png`.
+- **General lesson (also in REALISM-GUIDE): when the base project ships scanned/photoreal materials (City Sample's
+  `/Game/Building/…/Material/MI/{Block,Metal,Concrete}`), REUSE them over GPT-generated tiling — free, in-project, and
+  categorically better. Gen tiling + crack decals are the fallback, not the goal.**
+
+### Art-Deco block — POLISH PASS: City-Sample limestone has BAKED WINDOWS → reverted to plain stone (2026-06-21, Pat's QA, agent `artdeco-polish`)
+**Pat's QA: the block read "too GENERIC (not ornate deco)" and some buildings FLOATED. Root cause of generic = the
+prior scanned-materials course-correct over-reached: `MI_Bldg_Block_Limestone_{Beige,Brown}` on the carved kit's
+M_Stone slot painted FAKE WINDOW GRIDS over everything and FLATTENED the chevron/sunburst/fluting → the carved towers
+read like plain modern office buildings (verified: `docs/artdecoblock_polish_BEFORE_aerial.png`).**
+- **⚠️ THE GOTCHA (the headline): City Sample's `MI_Bldg_Block_*` (and the whole `/Game/Building/Material/MI/Block/`
+  set) are FACADE materials with WINDOW PATTERNS BAKED INTO THE ALBEDO** — authored for City Sample's OWN flat
+  building meshes. Slap them on a CUSTOM CARVED kit and they tile fake window grids across the geometry, hiding the
+  relief. **Rule: on custom carved deco/ornament meshes, the base stone slot MUST be a PLAIN stone material with NO
+  windows in the albedo. Scanned ≠ automatically right — match the texture's CONTENT to the mesh. Use a plain scanned
+  STONE/CONCRETE (no windows) or our generated `M_ArtDecoStone` (limestone albedo + height→normal at LOW strength
+  0.4, Rough 0.72). The carved ornament must be the detail, not a window texture.** Metal slot (scanned
+  `MI_Bldg_Metal_Brass`) was fine to keep — bare metal MIs have no baked windows.
+- **FIX = revert M_Stone slot to the plain warm-tone `MI_Stone_{Honey,Terracotta,PaleGold,Sooted}` (parent
+  `M_ArtDecoStone`) on ALL kit meshes** — both the 56 `Tints/<tone>/*` copies AND the 14 base `ArtDecoDetailed/*`
+  meshes (the base copies were ALSO on `MI_Bldg_Block_Limestone_Brown` and feed some tier graphs — easy to miss; swap
+  both). ISMs carry NO OverrideMaterials here, so editing each StaticMesh's `StaticMaterials[slot==M_Stone]` propagates
+  live, no regen needed. **`set_properties` on StaticMaterials needs the materialInterface refPath as a full OBJECT
+  path `…/MI_Stone_Honey.MI_Stone_Honey`** (the trailing `.AssetName`), else "not a valid object path for property
+  MaterialInterface" and the whole array write fails atomically.
+- **PaleGold reads near-WHITE again** (docs warned at 0.78; even 0.66 washed out under the bright key) → dropped all
+  four tones darker/warmer (PaleGold StoneColor 0.52,0.42,0.27; Honey 0.60,0.49,0.33; Terracotta 0.58,0.37,0.25;
+  Sooted 0.42,0.38,0.32) AND **dropped exposure +0.5→0.0** on both unbound PPVs (plain stone over the light pavement
+  was hot). The "white window-grid" towers in the polished aerial are NOT a material bug — they're the real carved
+  `window_*` bay geometry (deep recesses read dark, piers read light) on a light tone; darker tone + lower EV fixes the
+  washed look while keeping the deco window rhythm.
+- **FLOATING fix = re-seat every tier on the tier below's `get_actor_bounds().max.z`** (mid→base.zmax, top→mid.zmax,
+  crown→top.zmax−40), iteratively (apply, re-read bounds, apply next). Cause was tier `location.z` set to rounded
+  guesses (e.g. mid at 4000 when base.zmax was 3800 → 72cm gap). For each actor: `new_z = cur_z + (target_zmin −
+  cur_zmin)`. **ALWAYS pass full location+rotation+SCALE in the set_actor_transform** (the location-only scale-reset
+  bug) — verified all tier scales intact after (mids ~9.9-10.7, tops ~6.4, crowns 2.87, no thin columns).
+- Lumen GI + Lumen reflections + AO already on both PPVs (kept); MotionBlur 0; warm sun. Brass left dominant/gleaming
+  per Pat's "make brass POP, contrast is the signature" call. Keepers: `docs/artdecoblock_polish_{aerial,street,facade}.png`
+  (street = the boulevard-canyon money shot). Honest read: reads unmistakably as ornate carved 1920s-30s Art-Deco
+  (setbacks, piers, brass spandrel banding, spired crowns) and everything is grounded; the brass is on the heavy side
+  (reads closer to bronze-clad than stone-with-bronze-trim) — defensible given the explicit POP direction.

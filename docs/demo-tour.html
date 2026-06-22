@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic Game-Dev — World Tour</title>
+<style>
+  :root { --fg:#f2f2f2; --dim:#9aa0a6; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; background:#0a0a0c; color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; overflow:hidden; }
+  #stage { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  .slide { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    opacity:0; transition:opacity .35s ease; pointer-events:none; }
+  .slide.active { opacity:1; pointer-events:auto; }
+  .slide img { max-width:100vw; max-height:100vh; object-fit:contain; display:block; }
+  .cap { position:fixed; left:0; right:0; bottom:0; padding:48px 56px 40px;
+    background:linear-gradient(transparent, rgba(0,0,0,.78)); }
+  .cap .kick { font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:var(--dim); margin-bottom:8px; }
+  .cap h1 { font-size:34px; font-weight:650; letter-spacing:-.01em; }
+  .cap p { font-size:16px; color:var(--dim); margin-top:8px; max-width:60ch; }
+  #counter { position:fixed; top:26px; right:30px; font-size:14px; color:var(--dim);
+    letter-spacing:.08em; font-variant-numeric:tabular-nums; }
+  #hint { position:fixed; top:26px; left:30px; font-size:13px; color:var(--dim); letter-spacing:.04em; }
+  .nav { position:fixed; top:0; bottom:0; width:33%; cursor:pointer; z-index:5; }
+  #prev { left:0; } #next { right:0; }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div class="cap"><div class="kick" id="kick"></div><h1 id="title"></h1><p id="sub"></p></div>
+  <div id="counter"></div>
+  <div id="hint">← → / Space&nbsp;·&nbsp;click to advance&nbsp;·&nbsp;F = fullscreen</div>
+  <div class="nav" id="prev"></div><div class="nav" id="next"></div>
+<script>
+const SLIDES = [
+  { img:"glass2_aerial.png",                 kick:"Built with AI agents in Unreal 5.8", t:"Futuristic Glass City",        s:"City Sample base + 22 procedurally-generated glass towers, de-fogged to a clear day." },
+  { img:"car_showcase_aerial.png",           kick:"Separate world",                     t:"Drivable Car Showcase",        s:"All 13 City Sample vehicles — walk up, press C, drive any of them." },
+  { img:"paris_street.png",                  kick:"Custom Blender facade kit + PCG",     t:"Beaux-Arts Paris",            s:"Haussmann boulevards generated from a hand-built Parisian facade kit." },
+  { img:"parisblock_detail_v2_street.png",   kick:"Realism pass",                        t:"Paris — Detailed Block",      s:"Variant facades, stone-tone variation, carved-limestone normals, trees + street life." },
+  { img:"artdeco_aerial.png",                kick:"Custom Art-Deco kit + PCG",           t:"Art-Deco Skyline",            s:"1920s setback towers with ziggurat crowns from a bespoke deco facade kit." },
+  { img:"artdecoblock_warm_final_street.png",kick:"Realism pass",                        t:"Art-Deco — Detailed Block",   s:"Wedding-cake setbacks, carved ornament, gleaming bronze vs textured stone." },
+  { img:"decocity_chrysler_placed2.png",     kick:"Bespoke landmark",                    t:"The Chrysler Building",       s:"A hand-built Chrysler hero — gleaming sunburst-steel crown — dropped into the real city." },
+  { img:"decocity_polish_13_sunside_wide.png",kick:"The combine",                        t:"Deco Landmarks in a Real City",s:"Pale-limestone deco towers + the Chrysler standing in the photoreal metropolis, clear blue sky." },
+];
+const stage=document.getElementById('stage');
+SLIDES.forEach((sl,i)=>{ const d=document.createElement('div'); d.className='slide'; const im=new Image(); im.src=sl.img; im.alt=sl.t; d.appendChild(im); stage.appendChild(d); });
+let i=0; const slides=[...document.querySelectorAll('.slide')];
+function show(n){ i=(n+SLIDES.length)%SLIDES.length; slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+  document.getElementById('kick').textContent=SLIDES[i].kick; document.getElementById('title').textContent=SLIDES[i].t;
+  document.getElementById('sub').textContent=SLIDES[i].s; document.getElementById('counter').textContent=(i+1)+' / '+SLIDES.length; }
+function next(){show(i+1);} function prev(){show(i-1);}
+document.addEventListener('keydown',e=>{ if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();next();}
+  else if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();prev();}
+  else if(e.key==='f'||e.key==='F'){ if(!document.fullscreenElement)document.documentElement.requestFullscreen(); else document.exitFullscreen(); } });
+document.getElementById('next').onclick=next; document.getElementById('prev').onclick=prev;
+show(0);
+</script>
+</body>
+</html>

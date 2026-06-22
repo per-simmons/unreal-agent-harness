@@ -20,18 +20,20 @@ You fix realism by attacking variety, surface, and life — in that order of ban
 
 ### 3. Textured PBR surface + NORMAL MAPS — the #1 anti-"bland" lever
 - **General:** replace flat-color materials with real PBR (albedo + **normal** + roughness, ideally with grime/variation). A normal map alone turns a flat wall into carved, weathered stone. Three free sources, in priority order:
-  1. **Reuse the base project's own photoreal materials** — if you're in a project like City Sample, it already ships PBR limestone/concrete/brick with normals. Free, in-project, no download. **Do this first.**
+  1. **Reuse the base project's own photoreal materials** — if you're in a project like City Sample, it already ships PBR limestone/concrete/brick with normals. Free, in-project, no download. **Do this first.** **⚠️ BUT match the texture's CONTENT to YOUR mesh: City Sample's `MI_Bldg_Block_*` facade materials have WINDOW PATTERNS BAKED INTO THE ALBEDO (authored for CS's own flat building meshes). On a CUSTOM CARVED kit they tile fake window grids over the geometry and FLATTEN the ornament → "generic modern building." For carved/ornament meshes the base slot must be a PLAIN stone/concrete with NO windows in the albedo (a plain scanned surface, or a generated limestone like `M_ArtDecoStone`). Bare METAL MIs (`MI_Bldg_Metal_Brass`) are fine — no baked windows. Scanned ≠ automatically right; "reuse base materials first" means SURFACE materials, not facade materials. (Art-Deco block polish, 2026-06-21.)**
   2. **Quixel Megascans** — free photoreal tiling surfaces + decals; Nanite/virtual-texture friendly.
   3. **Generate tiling textures** — GPT image-gen (subscription, no API spend) for albedo + a grayscale height → derive a normal in UE (`NormalFromHeightmap`).
 - **Paris:** reusing City Sample's stone materials + generated limestone/plaster as the base (this pass) — the single biggest jump from "bland" to "stone."
 
 ### 4. Decals — grime, cracks, stains
 - **General:** scatter DecalActors of soot streaks, cracks, water staining, posters/vents over the clean surfaces. "Parallax-occlusion decals look extremely convincing." This breaks the too-perfect CG uniformity. Free decals in Megascans; or generate transparent PNGs.
-- **Paris:** soot-streak / crack / water-stain decals down the facades + a WorldZ grime gradient in the material.
+- **⚠️ GENERATED crack/grime decals read FAKE — do NOT rely on them as the detail driver (Pat's call, Art-Deco block).** GPT-generated crack-network / heavy-grime decals look obviously synthetic and cheapen the result. The detail comes from carved GEOMETRY + good (ideally scanned) MATERIALS + Lumen light — decals are at most a FEW very subtle, on-theme streaks (e.g. verdigris bleeding from bronze, opacity ~0.3). If in doubt, skip decals entirely; geometry + materials + light carry it. Megascans/real parallax decals are fine; gen-PNG crack networks are not.
+- **Paris:** soot-streak / crack / water-stain decals down the facades + a WorldZ grime gradient in the material. **(Art-Deco block superseded this — dropped the gen crack/soot decals, kept only subtle verdigris.)**
 
 ### 5. Ornament GEOMETRY (where the style lives)
 - **General:** flat boxes with window holes look cheap. Add real relief: **bevel every hard edge** (sharp flat edges are the top CG tell), multi-step cornices/string courses, dentils, pediments + keystones over windows, brackets, balustrades, pilaster capitals. **Nanite** makes high-poly ornament cheap — don't fear polycount. Generate this in Blender to the kit's module spec.
 - **Paris:** the `beaux_arts_kit/detailed/` pass — beveled edges, deep dentil cornices, window pediments + console brackets, finer balcony bars.
+- **Two-tone ornament (metal vs stone) — the Art-Deco bronze lesson:** if the style has METAL ornament (bronze spandrels, gilt grilles, copper crowns), author the kit with **2 material slots** (slot0 stone, slot1 metal) and a metal MI (Metallic 1.0). BUT two non-obvious gotchas: (a) **a multi-material Blender mesh can silently import as 1 slot** if the builder clears the material list after assigning per-face indices (`me.materials.clear()` zeroes `material_index`) — verify `>1` material_index value exists in-memory before export; (b) **polished metal alone reads DARK/black**, not gleaming — under a clear sky it reflects the dark ground. Make it actually gleam with a bright warm tint (push >1.0) + a SMALL warm **emissive** (~0.15-0.2, lifts recessed ornament out of black) + a brighter SkyLight. Contrast (bright metal vs matte stone) is the whole point — lean it hard. (Art-Deco block: `art_deco_kit/detailed/`, `M_ArtDecoBronze`.)
 
 ### 6. Roofs / tops
 - **General:** flat tops read as unfinished. Cap buildings with style-appropriate tops. The robust way is **separate roof actors** placed at each building's `get_actor_bounds().max.z` — NOT mid-graph `[Roof]` grammar surgery (that fragile edit silently zeroes spawns; see PCG-GUIDE).
@@ -49,7 +51,8 @@ You fix realism by attacking variety, surface, and life — in that order of ban
 Because there is **one editor** (concurrent edits freeze it), split the work:
 - **Parallelize PREP (many agents, no editor):** generate the detailed geometry kit (Blender), generate/curate textures + decals, research the base project's reusable materials.
 - **Serialize the APPLY (one editor agent):** import + assign PBR materials, place decals, swap in detailed meshes, scatter props.
-- **QA-LOOP (don't skip):** capture aerial + eye-level + facade-close, then *actually look* — is there variety? texture/normal detail? grime? roofs? life? Fix the single weakest lever, re-capture, repeat until it reads real. (Same loop that took the glass city from spikes to real.)
+- **QA-LOOP (don't skip):** capture aerial + eye-level + facade-close, then *actually look* — is there variety? texture/normal detail? grime? roofs? life? Fix the single weakest lever, re-capture, repeat until it reads real. (Same loop that took the glass city from spikes to real. The Art-Deco block's thin-column collapse + the bronze-reads-dark were both caught ONLY by looking at the capture, not by trusting "it returned success.")
+- **⚠️ Two editor gotchas that QA caught (both silent):** (1) **`set_actor_transform` with location-only RESETS scale to 1** — always pass the full `scale` in every move, or grammar footprints collapse to single-bay and props shrink. (2) The Startup-dup secretly contains the full **City Sample `Small_City`** as World-Partition actors that `find_actors` can't see but that RENDER — if your block sits at world origin it's buried inside that city; **relocate your block far out (~2.5km) onto its own ground** rather than trying to fog the co-located clutter away.
 
 ## The "bland 3D → real" checklist
 - [ ] Buildings differ (facade variant + height/width)
@@ -57,7 +60,8 @@ Because there is **one editor** (concurrent edits freeze it), split the work:
 - [ ] PBR material with a **normal map** (not flat color)
 - [ ] Grime / crack / stain decals
 - [ ] Beveled edges + ornament relief (cornices, surrounds, brackets)
-- [ ] Finished roofs (separate-actor recipe)
+- [ ] Finished roofs / tops (separate-actor recipe); style-correct MASSING (e.g. Art-Deco wedding-cake = stack 3 narrowing grammar tiers per tower, not one extrusion)
+- [ ] Metal ornament authored as a real 2nd material slot + made to GLEAM (bright tint + small emissive), not just "Metallic 1.0" (which reads dark)
 - [ ] Trees + vehicles + street props on real ground/sidewalks
 - [ ] Exposure tuned to the material; MotionBlur 0; no fog white-out
 - [ ] QA-looped from 3 angles until it actually looks real
