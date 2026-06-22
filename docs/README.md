@@ -15,7 +15,8 @@ Start with **[00-GETTING-STARTED.md](00-GETTING-STARTED.md)**. For the big pictu
 - [programmatic-toolset-capabilities.md](programmatic-toolset-capabilities.md) — batching many tool calls in one sandboxed script.
 
 ## 🗽 Real-world cities (Cesium)
-- [CESIUM-SETUP.md](CESIUM-SETUP.md) — **start here**: the 2 one-time human steps (one-click Fab install + a Google API key), then the agent builds the scene over the MCP. (Source-build footnote for bleeding-edge UE versions.)
+- [CESIUM-SETUP.md](CESIUM-SETUP.md) — **start here**: the 2 one-time human steps (one-click Fab install + a Google API key), then the agent builds the scene over the MCP.
+- [CESIUM-BUILD-FROM-SOURCE.md](CESIUM-BUILD-FROM-SOURCE.md) — **building Cesium v2.27.0 from source for UE 5.8 (macOS/Apple Silicon)** — the ONLY path when Fab has no build for your UE version. Exact, agent-executable: deps → recursive clone → 8 UE-5.8 patches → cesium-native CMake → `Darwin-universal`→`arm64` symlinks → editor dylibs via UBT against a throwaway C++ host → install → splat-tick patch.
 - [NYC-CESIUM-WALKTHROUGH.md](NYC-CESIUM-WALKTHROUGH.md) — **the step-by-step demo**: stream real NYC start to finish (plugin → Google 3D Tiles key → georeference → rebase → sun/sky → fly). Works for any city.
 - [cesium-for-unreal.md](cesium-for-unreal.md) — Cesium actor/property/function *reference*.
 - [cesium-rebase-solution.md](cesium-rebase-solution.md) — the georeference/origin-rebase so tiles render at the origin.

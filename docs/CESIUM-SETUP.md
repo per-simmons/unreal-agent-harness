@@ -2,8 +2,10 @@
 
 > Pull real-world cities (Google Photorealistic 3D Tiles) into Unreal, then let the **AI agent build the scene for you over the MCP**. You do two tiny one-time things; the agent does the rest.
 
+> **On UE 5.8 (or any UE version with no Fab release), the Fab install below does NOT exist** — Fab shows *"You cannot install this plugin as there are no compatible engines installed."* Building from source is then the **only** path. Follow **[CESIUM-BUILD-FROM-SOURCE.md](CESIUM-BUILD-FROM-SOURCE.md)** (exact, agent-executable) and skip step 1 here; step 2 (the Google key) still applies. The rest of this doc assumes the plugin is installed (whether from Fab or from source).
+
 ## You do 2 things (≈5 min, once)
-1. **Install Cesium for Unreal — one click from Fab.** [fab.com](https://www.fab.com) (sign in with your Epic account) → search **"Cesium for Unreal"** (free) → **Add to Library** → **Install to Engine** → in the editor, **Edit → Plugins → enable "Cesium for Unreal" → restart**. Its UI then lives under **Window → Cesium**.
+1. **Install Cesium for Unreal — one click from Fab** *(supported UE versions only; on 5.8 use the source build above)*. [fab.com](https://www.fab.com) (sign in with your Epic account) → search **"Cesium for Unreal"** (free) → **Add to Library** → **Install to Engine** → in the editor, **Edit → Plugins → enable "Cesium for Unreal" → restart**. Its UI then lives under **Window → Cesium**.
 2. **Get a Google Maps API key** (the one credential only you can make). Google Cloud Console → enable the **Map Tiles API** → **Create credentials → API key**. You'll hand this to the agent.
 
 That's the whole manual part. **You do NOT hand-place actors or hand-build the scene.**
@@ -23,5 +25,13 @@ You tell it the city + paste the key → it builds → you press Play and fly. R
 
 ---
 
-## Footnote — bleeding-edge UE with no Fab release (rare; what we hit on 5.8)
-Skip this unless Fab has **no** Cesium build for your exact UE version. We were on **UE 5.8** the week it dropped, before Cesium shipped a 5.8 release, so we built **v2.27 from source** and dropped it in as a project plugin (`<Project>/Plugins/CesiumForUnreal`) — which is why on that machine it's *not* a Fab download. If you're ever in that spot: `brew install nasm pkg-config cmake` → `git clone --recursive https://github.com/CesiumGS/cesium-unreal` → build `cesium-native` (CMake) → apply the UE-version compile fixes → build the plugin dylibs via UBT against a throwaway C++ host → copy into `<Project>/Plugins/`. Our build + the 5.8 patch live in `~/coding/cesium-build/` (`cesium-5.8-patches.diff`). **Most people will never need this — just install from Fab.**
+## No Fab release for your UE version? (UE 5.8 and any future bleeding-edge)
+This is **not** a footnote on 5.8 — it's the only way in. Fab has no 5.8 Cesium build, so we
+built **v2.27.0 from source** and installed it as a project plugin
+(`<Project>/Plugins/CesiumForUnreal`), which is why on this machine it's *not* a Fab download.
+The complete, exact, copy-pasteable recipe (deps → recursive clone → 8 UE-5.8 patches →
+cesium-native CMake build → `Darwin-universal`→`arm64` symlinks → editor dylibs via UBT against
+a throwaway C++ host → install → splat-tick patch) lives in
+**[CESIUM-BUILD-FROM-SOURCE.md](CESIUM-BUILD-FROM-SOURCE.md)**. Build artifacts + the patch:
+`~/coding/cesium-build/` (`cesium-5.8-patches.diff`). On a **supported** UE version, ignore all
+of this and just install from Fab (step 1 above).
