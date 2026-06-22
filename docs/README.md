@@ -15,6 +15,7 @@ Start with **[00-GETTING-STARTED.md](00-GETTING-STARTED.md)**. For the big pictu
 - [programmatic-toolset-capabilities.md](programmatic-toolset-capabilities.md) — batching many tool calls in one sandboxed script.
 
 ## 🗽 Real-world cities (Cesium)
+- [CESIUM-SETUP.md](CESIUM-SETUP.md) — **start here**: the 2 one-time human steps (one-click Fab install + a Google API key), then the agent builds the scene over the MCP. (Source-build footnote for bleeding-edge UE versions.)
 - [NYC-CESIUM-WALKTHROUGH.md](NYC-CESIUM-WALKTHROUGH.md) — **the step-by-step demo**: stream real NYC start to finish (plugin → Google 3D Tiles key → georeference → rebase → sun/sky → fly). Works for any city.
 - [cesium-for-unreal.md](cesium-for-unreal.md) — Cesium actor/property/function *reference*.
 - [cesium-rebase-solution.md](cesium-rebase-solution.md) — the georeference/origin-rebase so tiles render at the origin.

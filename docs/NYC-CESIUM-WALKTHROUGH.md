@@ -9,7 +9,8 @@
 A georeferenced photoreal Manhattan you can fly around — no modeling, it's real-world data streamed live. Same trick works for any city: just change the coordinates.
 
 ## Prerequisites
-- **Cesium for Unreal** plugin — free, from Fab/Epic. Edit → Plugins → enable **Cesium for Unreal** → restart.
+> **Plugin + Google API key setup (the 2 one-time human steps) → [CESIUM-SETUP.md](CESIUM-SETUP.md). Do that first.** Quick recap below.
+- **Cesium for Unreal** plugin — one-click free install from **Fab** (Edit → Plugins → enable → restart; UI lives under Window → Cesium). *(On a UE version too new for a Fab release — like our UE 5.8 — you build it from source; see the CESIUM-SETUP footnote. Most people just install from Fab.)*
 - **A Google Photorealistic 3D Tiles key** — Google Maps Platform API key with the **Map Tiles API** enabled.
   - ⚠️ Cesium ion's old free Google P3DT asset (id `2275207`) is **no longer free** — don't rely on it. Use the **direct Google key URL** instead:
     `https://tile.googleapis.com/v1/3dtiles/root.json?key=YOUR_KEY`
