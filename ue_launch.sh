@@ -24,7 +24,7 @@ set -euo pipefail
 
 HARNESS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UE="/Users/Shared/Epic Games/UE_5.8/Engine/Binaries/Mac/UnrealEditor"
-PROJECT="/Users/patsimmons/Documents/Unreal Projects/MyProject/MyProject.uproject"
+PROJECT="$HOME/Documents/Unreal Projects/MyProject/MyProject.uproject"
 LOGDIR="$HARNESS/logs"
 MCP_PORT=8123
 

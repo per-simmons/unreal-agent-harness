@@ -253,7 +253,7 @@ their editor dylibs into the (symlinked) source tree's `Binaries/Mac/`.
 ```bash
 "/Users/Shared/Epic Games/UE_5.8/Engine/Build/BatchFiles/Mac/Build.sh" \
   HostProjEditor Mac Development \
-  -Project="/Users/patsimmons/coding/cesium-build/hostproj/HostProj.uproject" \
+  -Project="$HOME/coding/cesium-build/hostproj/HostProj.uproject" \
   2>&1 | tee ~/coding/cesium-build/logs/editor-build.log
 ```
 
@@ -284,7 +284,7 @@ plugin's declared engine version to 5.8 so the editor will load it, then enable 
 `Source/` — which is what lets you later hot-rebuild a single module (see step 8).
 
 ```bash
-TARGET="/Users/patsimmons/Documents/Unreal Projects/MyProject"   # <- your project
+TARGET="$HOME/Documents/Unreal Projects/MyProject"   # <- your project
 mkdir -p "$TARGET/Plugins"
 
 # Copy the built plugin in (resolve the symlink to copy real files).
@@ -328,7 +328,7 @@ the top of `Tick`). Then rebuild via the project's editor target:
 ```bash
 "/Users/Shared/Epic Games/UE_5.8/Engine/Build/BatchFiles/Mac/Build.sh" \
   MyProjectEditor Mac Development \
-  -Project="/Users/patsimmons/Documents/Unreal Projects/MyProject/MyProject.uproject"
+  -Project="$HOME/Documents/Unreal Projects/MyProject/MyProject.uproject"
 ```
 
 (If `MyProject` has no C++ target, rebuild `HostProjEditor` as in step 6 and copy the

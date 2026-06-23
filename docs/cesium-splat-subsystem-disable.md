@@ -116,7 +116,7 @@ is a symlink to `cesium-build/cesium-unreal`). The recorded editor-build command
 ```bash
 "/Users/Shared/Epic Games/UE_5.8/Engine/Build/BatchFiles/Mac/Build.sh" \
   HostProjEditor Mac Development \
-  -Project="/Users/patsimmons/coding/cesium-build/hostproj/HostProj.uproject"
+  -Project="$HOME/coding/cesium-build/hostproj/HostProj.uproject"
 ```
 
 So the two reliable rebuild options:
@@ -128,7 +128,7 @@ there and let UBT recompile the project's plugin module:
 ```bash
 "/Users/Shared/Epic Games/UE_5.8/Engine/Build/BatchFiles/Mac/Build.sh" \
   MyProjectEditor Mac Development \
-  -Project="/Users/patsimmons/Documents/Unreal Projects/MyProject/MyProject.uproject"
+  -Project="$HOME/Documents/Unreal Projects/MyProject/MyProject.uproject"
 ```
 
 If `MyProject` has no C++ source/target, generate one (add an empty C++ class once in
@@ -141,10 +141,10 @@ Edit `cesium-build/cesium-unreal/Source/.../CesiumGaussianSplatSubsystem.cpp`, t
 ```bash
 "/Users/Shared/Epic Games/UE_5.8/Engine/Build/BatchFiles/Mac/Build.sh" \
   HostProjEditor Mac Development \
-  -Project="/Users/patsimmons/coding/cesium-build/hostproj/HostProj.uproject"
+  -Project="$HOME/coding/cesium-build/hostproj/HostProj.uproject"
 # then copy the rebuilt CesiumRuntime editor dylib into the project plugin:
-cp "/Users/patsimmons/coding/cesium-build/hostproj/Plugins/CesiumForUnreal/Binaries/Mac/"libUnrealEditor-CesiumRuntime-*.dylib \
-   "/Users/patsimmons/Documents/Unreal Projects/MyProject/Plugins/CesiumForUnreal/Binaries/Mac/"
+cp "$HOME/coding/cesium-build/hostproj/Plugins/CesiumForUnreal/Binaries/Mac/"libUnrealEditor-CesiumRuntime-*.dylib \
+   "$HOME/Documents/Unreal Projects/MyProject/Plugins/CesiumForUnreal/Binaries/Mac/"
 ```
 
 Either way you are rebuilding **only `CesiumRuntime`** (one `.cpp` changed) — not the
